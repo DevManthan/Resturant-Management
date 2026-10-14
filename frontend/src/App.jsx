@@ -72,8 +72,14 @@ export default function App() {
       />
 
       {/* Main Content Canvas with responsive padding */}
-      <main className="flex-1 min-w-0 p-3.5 sm:p-5 md:p-6 lg:p-8 overflow-y-auto pb-24 md:pb-8">
-        <div className="max-w-7xl mx-auto">
+      <main
+        className={`flex-1 min-w-0 overflow-y-auto ${
+          activeTab === 'live-orders'
+            ? 'p-3 sm:p-4 md:p-5 w-full flex flex-col pb-20 md:pb-5'
+            : 'p-3.5 sm:p-5 md:p-6 lg:p-8 pb-24 md:pb-8'
+        }`}
+      >
+        <div className={activeTab === 'live-orders' ? 'w-full flex-1 flex flex-col' : 'max-w-7xl mx-auto'}>
           {activeTab === 'analytics' && <ExecutiveAnalytics />}
           {activeTab === 'live-orders' && <LiveOrdersKDS />}
           {activeTab === 'tables' && <TableManager />}
