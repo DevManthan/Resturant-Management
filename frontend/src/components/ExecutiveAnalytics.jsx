@@ -420,34 +420,10 @@ export default function ExecutiveAnalytics() {
   return (
     <div className="space-y-5 sm:space-y-6">
       {/* Top Header */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 sm:gap-4">
-        <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight leading-tight">
-            Executive Analytics
-          </h1>
-          <p className="text-xs text-slate-500 mt-1 font-medium leading-tight">
-            Real-time performance metrics for Bistro BI.
-          </p>
-        </div>
-
-        {/* Header Action Controls (Replaces Search Bar) */}
-        <div className="flex items-center gap-2.5 self-stretch sm:self-auto justify-end">
-          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold shadow-xs">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-            <span>PostgreSQL Live</span>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => fetchCatalog(false)}
-            disabled={isLoading}
-            className="h-10 px-3.5 rounded-xl bg-white hover:bg-slate-50 border border-slate-300 text-xs font-bold text-slate-700 shadow-xs flex items-center gap-2 transition-all cursor-pointer disabled:opacity-50"
-            title="Refresh metrics from PostgreSQL"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin text-blue-600' : 'text-slate-500'}`} />
-            <span>{isLoading ? 'Syncing...' : 'Refresh'}</span>
-          </button>
-        </div>
+      <div className="flex items-center justify-between pb-1">
+        <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight leading-none">
+          Executive Analytics
+        </h1>
       </div>
 
       {/* Top 4 KPI Cards with matched vertical heights and baselines */}

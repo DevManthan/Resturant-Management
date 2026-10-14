@@ -9,7 +9,9 @@ import {
   X,
   Check,
   ChevronDown,
-  Sparkles
+  Sparkles,
+  UserCheck,
+  Utensils
 } from 'lucide-react';
 import { bookingApi } from '../services/api';
 
@@ -36,7 +38,7 @@ export default function TableManager() {
       name: 'Booth-01',
       seats: 6,
       status: 'Reserved',
-      party: '',
+      party: 'Mehta Party',
       time: '7:30 PM'
     },
     {
@@ -58,7 +60,7 @@ export default function TableManager() {
   ]);
 
   // Quick Reserve form state
-  const [selectedTable, setSelectedTable] = useState('T-01');
+  const [selectedTable, setSelectedTable] = useState('Booth-01');
   const [partySize, setPartySize] = useState(2);
   const [reserveTime, setReserveTime] = useState('19:30');
   const [partyName, setPartyName] = useState('');
@@ -74,22 +76,38 @@ export default function TableManager() {
   const [slotDateInput, setSlotDateInput] = useState(new Date().toISOString().split('T')[0]);
   const [slotTimeInput, setSlotTimeInput] = useState('19:00');
 
-  // Quick direct table status updater
+  // Direct table status updater (e.g. Reserved -> Occupied, Occupied -> Available)
   const handleSetTableStatus = (tableName, newStatus) => {
     setTables((prev) =>
-      prev.map((t) =>
-        t.name === tableName
-          ? {
-              ...t,
-              status: newStatus,
-              party: newStatus === 'Available' ? '' : t.party,
-              time: newStatus === 'Available' ? '' : t.time
-            }
-          : t
-      )
+      prev.map((t) => {
+        if (t.name === tableName) {
+          let updatedParty = t.party;
+          let updatedTime = t.time;
+          if (newStatus === 'Occupied') {
+            updatedParty = t.party || 'Dine-In Guests';
+            updatedTime = 'Seated just now';
+          } else if (newStatus === 'Available') {
+            updatedParty = '';
+            updatedTime = '';
+          } else if (newStatus === 'Reserved') {
+            updatedParty = t.party || 'Reserved Party';
+            updatedTime = currentSlot.time || '7:30 PM';
+          } else if (newStatus === 'Maintenance') {
+            updatedParty = '';
+            updatedTime = 'Out of order';
+          }
+          return {
+            ...t,
+            status: newStatus,
+            party: updatedParty,
+            time: updatedTime
+          };
+        }
+        return t;
+      })
     );
-    setSuccessMsg(`Table ${tableName} marked as ${newStatus}`);
-    setTimeout(() => setSuccessMsg(null), 3000);
+    setSuccessMsg(`Table ${tableName} is now marked as "${newStatus}"!`);
+    setTimeout(() => setSuccessMsg(null), 3500);
   };
 
   // Sync initial bookings from PostgreSQL
@@ -187,6 +205,10 @@ export default function TableManager() {
     }
   };
 
+  const currentTable =
+    tables.find((t) => t.name.toLowerCase() === (selectedTable || '').toLowerCase()) ||
+    tables[0];
+
   return (
     <div className="space-y-5 sm:space-y-6">
       {/* Header matching Image 3 with clean horizontal alignment */}
@@ -219,7 +241,7 @@ export default function TableManager() {
 
         {/* Action Controls */}
         <div className="flex items-center gap-2.5 sm:gap-3 w-full sm:w-auto justify-between sm:justify-end">
-          {/* Active Date & Time Slot Button (Image 1) */}
+          {/* Active Date & Time Slot Button */}
           <button
             type="button"
             onClick={() => setIsSlotModalOpen(true)}
@@ -243,9 +265,9 @@ export default function TableManager() {
         </div>
       </div>
 
-      {/* Main Floorplan Area & Quick Reserve Panel */}
+      {/* Main Floorplan Area & Table Control Panel */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-start">
-        {/* Left: Table Cards Grid (takes 8 cols on desktop) */}
+        {/* Left: Table Cards Grid (takes 7-8 cols on desktop) */}
         <div className="lg:col-span-7 xl:col-span-8 order-2 lg:order-1">
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-3.5">
             {tables.map((table) => {
@@ -254,50 +276,103 @@ export default function TableManager() {
                 <div
                   key={table.id}
                   onClick={() => setSelectedTable(table.name)}
-                  className={`bg-white rounded-2xl p-4 border transition-all cursor-pointer shadow-[0_4px_16px_rgba(0,0,0,0.05),0_1px_3px_rgba(0,0,0,0.03)] hover:shadow-md flex flex-col justify-between min-h-[145px] ${
+                  className={`bg-white rounded-2xl p-3.5 border transition-all cursor-pointer shadow-[0_4px_16px_rgba(0,0,0,0.05),0_1px_3px_rgba(0,0,0,0.03)] hover:shadow-md flex flex-col justify-between min-h-[160px] ${
                     isSelected
                       ? 'border-black ring-2 ring-black/80'
                       : 'border-slate-200/90 hover:border-slate-400'
                   }`}
                 >
-                  <div className="flex items-center justify-between">
-                    <span className="font-extrabold text-slate-900 text-sm leading-none">{table.name}</span>
-                    <div className="flex items-center gap-1 text-slate-500 text-xs font-semibold leading-none">
-                      <User className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                      <span>{table.seats}</span>
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <span className="font-extrabold text-slate-900 text-sm leading-none">{table.name}</span>
+                      <div className="flex items-center gap-1 text-slate-500 text-xs font-semibold leading-none">
+                        <User className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                        <span>{table.seats}</span>
+                      </div>
+                    </div>
+
+                    <div className="mt-2.5">
+                      <span
+                        className={`h-5 px-2 rounded-full text-[10px] font-bold border shadow-2xs inline-flex items-center justify-center leading-none ${getStatusBadge(
+                          table.status
+                        )}`}
+                      >
+                        {table.status}
+                      </span>
+
+                      {table.party && (
+                        <div className="text-[11px] text-slate-700 mt-2 font-bold truncate leading-tight">
+                          {table.party}
+                        </div>
+                      )}
+                      {table.time && (
+                        <div className="text-[10px] text-slate-400 mt-0.5 font-medium leading-tight">
+                          {table.time}
+                        </div>
+                      )}
                     </div>
                   </div>
 
-                  <div className="mt-3">
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        const cycle = {
-                          Available: 'Occupied',
-                          Occupied: 'Reserved',
-                          Reserved: 'Maintenance',
-                          Maintenance: 'Available'
-                        };
-                        handleSetTableStatus(table.name, cycle[table.status] || 'Available');
-                      }}
-                      title="Click to toggle status"
-                      className={`h-6 px-2.5 rounded-full text-[11px] font-bold border shadow-2xs inline-flex items-center justify-center leading-none cursor-pointer hover:opacity-85 transition-opacity ${getStatusBadge(
-                        table.status
-                      )}`}
-                    >
-                      {table.status}
-                    </button>
-
-                    {table.party && (
-                      <div className="text-[11px] text-slate-700 mt-2.5 font-bold truncate leading-tight">
-                        {table.party}
-                      </div>
+                  {/* 1-Click Action Button on Table Card */}
+                  <div className="mt-3 pt-2 border-t border-slate-100">
+                    {table.status === 'Reserved' && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedTable(table.name);
+                          handleSetTableStatus(table.name, 'Occupied');
+                        }}
+                        className="w-full py-1.5 px-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[11px] font-bold shadow-xs flex items-center justify-center gap-1 transition-all active:scale-95 cursor-pointer"
+                        title="Seat reserved party now (Mark Occupied)"
+                      >
+                        <UserCheck className="w-3.5 h-3.5" />
+                        <span>Seat Guests</span>
+                      </button>
                     )}
-                    {table.time && (
-                      <div className="text-[10px] text-slate-400 mt-0.5 font-medium leading-tight">
-                        {table.time}
-                      </div>
+                    {table.status === 'Occupied' && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedTable(table.name);
+                          handleSetTableStatus(table.name, 'Available');
+                        }}
+                        className="w-full py-1.5 px-2 bg-slate-900 hover:bg-black text-white rounded-lg text-[11px] font-bold shadow-xs flex items-center justify-center gap-1 transition-all active:scale-95 cursor-pointer"
+                        title="Free table / Guests left (Mark Available)"
+                      >
+                        <Check className="w-3.5 h-3.5" />
+                        <span>Free Table</span>
+                      </button>
+                    )}
+                    {table.status === 'Available' && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedTable(table.name);
+                          handleSetTableStatus(table.name, 'Occupied');
+                        }}
+                        className="w-full py-1.5 px-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-[11px] font-semibold flex items-center justify-center gap-1 transition-all active:scale-95 cursor-pointer"
+                        title="Seat walk-in party (Mark Occupied)"
+                      >
+                        <Utensils className="w-3 h-3 text-slate-600" />
+                        <span>Seat Now</span>
+                      </button>
+                    )}
+                    {table.status === 'Maintenance' && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedTable(table.name);
+                          handleSetTableStatus(table.name, 'Available');
+                        }}
+                        className="w-full py-1.5 px-2 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 rounded-lg text-[11px] font-semibold flex items-center justify-center gap-1 transition-all active:scale-95 cursor-pointer"
+                        title="Reopen Table (Mark Available)"
+                      >
+                        <span>Reopen</span>
+                      </button>
                     )}
                   </div>
                 </div>
@@ -306,95 +381,240 @@ export default function TableManager() {
           </div>
         </div>
 
-        {/* Right: Quick Reserve Panel (takes 4-5 cols on desktop, full width on mobile) */}
-        <div className="lg:col-span-5 xl:col-span-4 order-1 lg:order-2 bg-white rounded-2xl p-5 sm:p-6 border border-slate-200/90 shadow-[0_4px_20px_rgba(0,0,0,0.06),0_1px_3px_rgba(0,0,0,0.03)] w-full">
-          <div className="pb-3.5 sm:pb-4 border-b border-slate-100">
-            <h2 className="text-base font-bold text-slate-900 leading-none">Quick Reserve</h2>
-            <p className="text-xs text-slate-400 mt-1 font-medium leading-none">
-              Block a table for incoming guests.
+        {/* Right: Table Control & Quick Reserve Panel */}
+        <div className="lg:col-span-5 xl:col-span-4 order-1 lg:order-2 bg-white rounded-2xl p-5 sm:p-6 border border-slate-200/90 shadow-[0_4px_20px_rgba(0,0,0,0.06),0_1px_3px_rgba(0,0,0,0.03)] w-full space-y-5">
+          {/* Selected Table Info Header */}
+          <div className="pb-3.5 border-b border-slate-100">
+            <div className="flex items-center justify-between">
+              <div>
+                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Selected Table</span>
+                <h2 className="text-lg font-extrabold text-slate-900 leading-tight">
+                  {currentTable ? currentTable.name : selectedTable || 'Select a Table'}
+                </h2>
+              </div>
+              {currentTable && (
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1 text-slate-600 text-xs font-semibold bg-slate-100 px-2 py-1 rounded-lg">
+                    <User className="w-3.5 h-3.5 text-slate-500" />
+                    <span>{currentTable.seats} Seats</span>
+                  </div>
+                  <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold border ${getStatusBadge(currentTable.status)}`}>
+                    {currentTable.status}
+                  </span>
+                </div>
+              )}
+            </div>
+            <p className="text-xs text-slate-400 mt-1 font-medium">
+              Manage status or seat incoming guests in real-time.
             </p>
           </div>
 
           {successMsg && (
-            <div className="mt-4 p-2.5 rounded-xl bg-emerald-50 border border-emerald-300 text-emerald-800 text-xs font-bold flex items-center gap-2 shadow-xs leading-none">
+            <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-300 text-emerald-800 text-xs font-bold flex items-center gap-2 shadow-xs leading-none">
               <CheckCircle2 className="w-4 h-4 shrink-0" />
               <span>{successMsg}</span>
             </div>
           )}
 
-          <form onSubmit={handleBlockTable} className="mt-4 space-y-4 text-xs">
-            {/* Table Number */}
-            <div>
-              <label className="block text-slate-700 font-bold mb-1.5 leading-none">
-                Table Number
-              </label>
-              <input
-                type="text"
-                placeholder="e.g. T-01"
-                value={selectedTable}
-                onChange={(e) => setSelectedTable(e.target.value)}
-                className="w-full h-10 px-3.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-black/10 focus:border-black transition-all leading-none"
-              />
+          {/* 1-Click Status Switcher Tabs */}
+          <div>
+            <label className="block text-slate-700 font-bold mb-2 text-xs leading-none">
+              Quick Status Switcher
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                { status: 'Available', color: 'hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-300' },
+                { status: 'Occupied', color: 'hover:bg-rose-50 hover:text-rose-700 hover:border-rose-300' },
+                { status: 'Reserved', color: 'hover:bg-amber-50 hover:text-amber-700 hover:border-amber-300' },
+                { status: 'Maintenance', color: 'hover:bg-slate-100 hover:text-slate-800 hover:border-slate-300' }
+              ].map(({ status, color }) => {
+                const isActive = currentTable?.status === status;
+                return (
+                  <button
+                    key={status}
+                    type="button"
+                    onClick={() => handleSetTableStatus(currentTable?.name || selectedTable, status)}
+                    className={`h-9 px-3 rounded-xl text-xs font-bold border transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                      isActive
+                        ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
+                        : `bg-slate-50 text-slate-700 border-slate-200 ${color}`
+                    }`}
+                  >
+                    <span
+                      className={`w-2 h-2 rounded-full ${
+                        status === 'Available'
+                          ? 'bg-emerald-500'
+                          : status === 'Occupied'
+                          ? 'bg-rose-500'
+                          : status === 'Reserved'
+                          ? 'bg-amber-500'
+                          : 'bg-slate-400'
+                      }`}
+                    ></span>
+                    <span>{status}</span>
+                  </button>
+                );
+              })}
             </div>
+          </div>
 
-            {/* Party Size Stepper - Symmetrical with matched heights */}
-            <div>
-              <label className="block text-slate-700 font-bold mb-1.5 leading-none">
-                Party Size
-              </label>
-              <div className="flex items-center gap-2">
+          {/* Contextual Action Card (High Visibility) */}
+          {currentTable?.status === 'Reserved' && (
+            <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 space-y-2.5">
+              <div className="flex items-center gap-2 text-amber-900 font-bold text-xs">
+                <Clock className="w-4 h-4 text-amber-600 shrink-0" />
+                <span>Reserved Party: {currentTable.party || 'Guest'} ({currentTable.time || 'Upcoming'})</span>
+              </div>
+              <p className="text-[11px] text-amber-800 leading-tight">
+                Guests have arrived? Click below to immediately mark this table as Occupied.
+              </p>
+              <div className="pt-1 flex gap-2">
                 <button
                   type="button"
-                  onClick={() => setPartySize(Math.max(1, partySize - 1))}
-                  className="w-10 h-10 rounded-xl border border-slate-300 bg-white flex items-center justify-center text-slate-700 hover:bg-slate-100 font-bold shadow-xs active:scale-95 transition-all shrink-0"
-                  aria-label="Decrease party size"
+                  onClick={() => handleSetTableStatus(currentTable.name, 'Occupied')}
+                  className="flex-1 h-10 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-sm transition-all active:scale-98 cursor-pointer"
                 >
-                  <Minus className="w-4 h-4" />
+                  <UserCheck className="w-4 h-4" />
+                  <span>Seat Guests (Mark Occupied)</span>
                 </button>
-                <div className="w-14 h-10 rounded-xl border border-slate-300 bg-slate-50 flex items-center justify-center text-xs font-bold text-slate-900 shadow-xs leading-none">
-                  {partySize}
-                </div>
                 <button
                   type="button"
-                  onClick={() => setPartySize(partySize + 1)}
-                  className="w-10 h-10 rounded-xl border border-slate-300 bg-white flex items-center justify-center text-slate-700 hover:bg-slate-100 font-bold shadow-xs active:scale-95 transition-all shrink-0"
-                  aria-label="Increase party size"
+                  onClick={() => handleSetTableStatus(currentTable.name, 'Available')}
+                  className="px-3 h-10 bg-white hover:bg-rose-50 text-rose-700 border border-rose-200 rounded-xl text-xs font-bold transition-all cursor-pointer"
+                  title="Cancel this reservation"
                 >
-                  <Plus className="w-4 h-4" />
+                  Cancel
                 </button>
               </div>
             </div>
+          )}
 
-            {/* Time */}
-            <div>
-              <label className="block text-slate-700 font-bold mb-1.5 leading-none">
-                Time
-              </label>
-              <input
-                type="time"
-                value={reserveTime}
-                onChange={(e) => setReserveTime(e.target.value)}
-                className="w-full h-10 px-3.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-black/10 focus:border-black font-mono transition-all"
-              />
-            </div>
-
-            {/* Action Buttons */}
-            <div className="pt-4 sm:pt-6 space-y-2.5">
-              <button
-                type="submit"
-                className="w-full h-11 bg-black hover:bg-slate-800 text-white rounded-xl text-xs font-bold shadow-sm transition-all active:scale-[0.99] flex items-center justify-center leading-none"
-              >
-                Block Table
-              </button>
+          {currentTable?.status === 'Occupied' && (
+            <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 space-y-2.5">
+              <div className="flex items-center gap-2 text-rose-900 font-bold text-xs">
+                <Utensils className="w-4 h-4 text-rose-600 shrink-0" />
+                <span>Currently Dining: {currentTable.party || 'Guests'} ({currentTable.time || 'Active'})</span>
+              </div>
               <button
                 type="button"
-                onClick={handleClearForm}
-                className="w-full h-11 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-bold transition-all shadow-xs flex items-center justify-center leading-none"
+                onClick={() => handleSetTableStatus(currentTable.name, 'Available')}
+                className="w-full h-10 bg-slate-900 hover:bg-black text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-sm transition-all active:scale-98 cursor-pointer"
               >
-                Clear Form
+                <CheckCircle2 className="w-4 h-4" />
+                <span>Free Table (Mark Available)</span>
               </button>
             </div>
-          </form>
+          )}
+
+          {currentTable?.status === 'Available' && (
+            <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 space-y-2.5">
+              <div className="flex items-center gap-2 text-emerald-900 font-bold text-xs">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>Table {currentTable.name} is ready for guests</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => handleSetTableStatus(currentTable.name, 'Occupied')}
+                className="w-full h-10 bg-black hover:bg-slate-800 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-sm transition-all active:scale-98 cursor-pointer"
+              >
+                <UserCheck className="w-4 h-4" />
+                <span>Seat Walk-in Party (Mark Occupied)</span>
+              </button>
+            </div>
+          )}
+
+          {/* Advance Reservation Form */}
+          <div className="pt-2 border-t border-slate-100">
+            <h3 className="text-xs font-bold text-slate-800 mb-3">Advance Reservation</h3>
+            <form onSubmit={handleBlockTable} className="space-y-3.5 text-xs">
+              {/* Table Number */}
+              <div>
+                <label className="block text-slate-700 font-bold mb-1 leading-none">
+                  Table Number
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. T-01"
+                  value={selectedTable}
+                  onChange={(e) => setSelectedTable(e.target.value)}
+                  className="w-full h-9 px-3 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-black/10 focus:border-black transition-all leading-none"
+                />
+              </div>
+
+              {/* Guest / Party Name */}
+              <div>
+                <label className="block text-slate-700 font-bold mb-1 leading-none">
+                  Guest / Party Name
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Anderson Family"
+                  value={partyName}
+                  onChange={(e) => setPartyName(e.target.value)}
+                  className="w-full h-9 px-3 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-black/10 focus:border-black transition-all leading-none"
+                />
+              </div>
+
+              {/* Party Size Stepper & Time in 2 cols */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-slate-700 font-bold mb-1 leading-none">
+                    Party Size
+                  </label>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setPartySize(Math.max(1, partySize - 1))}
+                      className="w-8 h-9 rounded-xl border border-slate-300 bg-white flex items-center justify-center text-slate-700 hover:bg-slate-100 font-bold shadow-xs active:scale-95 transition-all shrink-0 cursor-pointer"
+                      aria-label="Decrease party size"
+                    >
+                      <Minus className="w-3.5 h-3.5" />
+                    </button>
+                    <div className="flex-1 h-9 rounded-xl border border-slate-300 bg-slate-50 flex items-center justify-center text-xs font-bold text-slate-900 shadow-xs leading-none">
+                      {partySize}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setPartySize(partySize + 1)}
+                      className="w-8 h-9 rounded-xl border border-slate-300 bg-white flex items-center justify-center text-slate-700 hover:bg-slate-100 font-bold shadow-xs active:scale-95 transition-all shrink-0 cursor-pointer"
+                      aria-label="Increase party size"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-slate-700 font-bold mb-1 leading-none">
+                    Time
+                  </label>
+                  <input
+                    type="time"
+                    value={reserveTime}
+                    onChange={(e) => setReserveTime(e.target.value)}
+                    className="w-full h-9 px-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-black/10 focus:border-black font-mono transition-all"
+                  />
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="pt-2 flex gap-2">
+                <button
+                  type="submit"
+                  className="flex-1 h-10 bg-black hover:bg-slate-800 text-white rounded-xl text-xs font-bold shadow-sm transition-all active:scale-[0.99] flex items-center justify-center leading-none cursor-pointer"
+                >
+                  Reserve Table
+                </button>
+                <button
+                  type="button"
+                  onClick={handleClearForm}
+                  className="px-3 h-10 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-bold transition-all shadow-xs flex items-center justify-center leading-none cursor-pointer"
+                >
+                  Clear
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       </div>
 
