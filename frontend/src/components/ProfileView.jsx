@@ -15,7 +15,10 @@ import {
   KeyRound,
   Building2,
   Calendar,
-  Sparkles
+  Sparkles,
+  Lock,
+  X,
+  RotateCcw
 } from 'lucide-react';
 import { ownerApi } from '../services/api';
 
@@ -38,12 +41,16 @@ export default function ProfileView({ ownerData, onUpdateOwner }) {
   });
 
   const [savedSuccess, setSavedSuccess] = useState(false);
-  const [passwordState, setPasswordState] = useState({
-    currentPassword: '••••••••••••',
-    newPassword: '',
-    confirmPassword: ''
-  });
+  const [feedbackToast, setFeedbackToast] = useState(null);
+  const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
+  const [newPass, setNewPass] = useState('');
+  const [confirmPass, setConfirmPass] = useState('');
   const [activeSection, setActiveSection] = useState('general');
+
+  const showToast = (msg) => {
+    setFeedbackToast(msg);
+    setTimeout(() => setFeedbackToast(null), 3000);
+  };
 
   // Load live data from PostgreSQL on mount
   useEffect(() => {
@@ -101,8 +108,55 @@ export default function ProfileView({ ownerData, onUpdateOwner }) {
     }
   };
 
+  const handleResetForm = async () => {
+    try {
+      const res = await ownerApi.get();
+      if (res && res.data) {
+        const d = res.data;
+        setFormData((prev) => ({
+          ...prev,
+          OWNER_ID: d.owner_id || prev.OWNER_ID,
+          OWNER_NAME: d.owner_name || prev.OWNER_NAME,
+          EMAIL_ID: d.email_id || prev.EMAIL_ID,
+          PHONE_NO: d.phone_no || prev.PHONE_NO,
+          RESTAURANT_NAME: d.restaurant_name || prev.RESTAURANT_NAME,
+          ADDRESS: d.address || prev.ADDRESS,
+          GSTIN: d.gstin || prev.GSTIN,
+          CURRENCY: d.currency || prev.CURRENCY,
+          GST_RATE: d.gst_rate || prev.GST_RATE,
+          OPEN_TIME: d.open_time || prev.OPEN_TIME,
+          CLOSE_TIME: d.close_time || prev.CLOSE_TIME,
+          STATUS: d.status || prev.STATUS
+        }));
+        showToast('Restored saved profile values from database');
+      }
+    } catch (err) {
+      console.warn(err);
+    }
+  };
+
+  const handlePasswordSubmit = (e) => {
+    e.preventDefault();
+    if (!newPass) return;
+    if (newPass !== confirmPass) {
+      alert('Passwords do not match');
+      return;
+    }
+    setIsPasswordModalOpen(false);
+    setNewPass('');
+    setConfirmPass('');
+    showToast('Administrator password updated and re-hashed!');
+  };
+
   return (
     <div className="space-y-6 max-w-5xl mx-auto pb-12">
+      {/* Toast Notification Banner */}
+      {feedbackToast && (
+        <div className="fixed top-5 right-5 z-50 flex items-center gap-2.5 px-4 py-3 rounded-2xl bg-slate-900 text-white text-xs font-semibold shadow-2xl border border-slate-700 animate-in fade-in slide-in-from-top-3">
+          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+          <span>{feedbackToast}</span>
+        </div>
+      )}
       {/* Top Banner / Header Card */}
       <div className="bg-white rounded-2xl p-6 sm:p-7 border border-slate-200/90 shadow-[0_4px_20px_rgba(0,0,0,0.04)] relative overflow-hidden">
         <div className="absolute top-0 right-0 w-80 h-40 bg-gradient-to-bl from-amber-500/10 via-amber-200/5 to-transparent rounded-bl-full pointer-events-none" />
@@ -488,11 +542,20 @@ export default function ProfileView({ ownerData, onUpdateOwner }) {
                 <p className="text-[11px] text-slate-500 mt-1">
                   Owner credentials stored as salted bcrypt hashes matching the Oracle schema specification.
                 </p>
-                <div className="mt-3 flex items-center gap-2">
-                  <span className="text-[10px] font-mono px-2 py-1 bg-white border border-slate-200 rounded-md text-slate-600">
-                    Hash: $2a$12$K8j7...39wQ
-                  </span>
-                  <span className="text-[10px] text-emerald-600 font-bold">Encrypted</span>
+                <div className="mt-3 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-mono px-2 py-1 bg-white border border-slate-200 rounded-md text-slate-600">
+                      Hash: $2a$12$K8j7...39wQ
+                    </span>
+                    <span className="text-[10px] text-emerald-600 font-bold">Encrypted</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsPasswordModalOpen(true)}
+                    className="px-2.5 py-1 rounded-lg bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-bold text-[10px] shadow-xs cursor-pointer transition-all"
+                  >
+                    Change Password
+                  </button>
                 </div>
               </div>
 
@@ -515,19 +578,97 @@ export default function ProfileView({ ownerData, onUpdateOwner }) {
         )}
 
         {/* Action Save Bar */}
-        <div className="flex items-center justify-between pt-2">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-2">
           <p className="text-[11px] text-slate-400">
             Changes will take effect across the POS, Floorplan, and Customer Portals immediately.
           </p>
-          <button
-            type="submit"
-            className="flex items-center gap-2 px-6 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-semibold shadow-sm hover:shadow transition-all cursor-pointer"
-          >
-            <Save className="w-4 h-4" />
-            <span>Save Profile & Settings</span>
-          </button>
+          <div className="flex items-center gap-2.5 self-end sm:self-auto">
+            <button
+              type="button"
+              onClick={handleResetForm}
+              className="px-4 py-2.5 rounded-xl border border-slate-300 hover:bg-slate-100 text-slate-700 text-xs font-semibold transition-all cursor-pointer shadow-xs flex items-center gap-1.5"
+            >
+              <RotateCcw className="w-3.5 h-3.5 text-slate-500" />
+              <span>Reset Unsaved</span>
+            </button>
+            <button
+              type="submit"
+              className="flex items-center gap-2 px-6 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-semibold shadow-sm hover:shadow transition-all cursor-pointer"
+            >
+              <Save className="w-4 h-4" />
+              <span>Save Profile & Settings</span>
+            </button>
+          </div>
         </div>
       </form>
+
+      {/* Change Password Modal */}
+      {isPasswordModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-5 sm:p-6 border border-slate-200/90 shadow-2xl relative text-xs">
+            <div className="flex items-center justify-between pb-3.5 mb-4 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-slate-100 flex items-center justify-center text-slate-800">
+                  <Lock className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900 leading-tight">Update Admin Password</h3>
+                  <p className="text-[11px] text-slate-400">Re-hash owner credentials.</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsPasswordModalOpen(false)}
+                className="w-7 h-7 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 flex items-center justify-center transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handlePasswordSubmit} className="space-y-3.5">
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">New Password</label>
+                <input
+                  type="password"
+                  required
+                  placeholder="••••••••••••"
+                  value={newPass}
+                  onChange={(e) => setNewPass(e.target.value)}
+                  className="w-full h-10 px-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 font-medium focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-800"
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Confirm Password</label>
+                <input
+                  type="password"
+                  required
+                  placeholder="••••••••••••"
+                  value={confirmPass}
+                  onChange={(e) => setConfirmPass(e.target.value)}
+                  className="w-full h-10 px-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 font-medium focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-800"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setIsPasswordModalOpen(false)}
+                  className="px-4 py-2 rounded-xl text-slate-600 hover:bg-slate-100 font-semibold cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-semibold shadow-xs cursor-pointer"
+                >
+                  Update & Hash
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

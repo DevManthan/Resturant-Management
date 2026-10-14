@@ -154,41 +154,43 @@ export default function ExecutiveAnalytics() {
     description: ''
   });
 
+  // Fetch catalog from PostgreSQL API
+  const fetchCatalog = async (silent = false) => {
+    try {
+      if (!silent) setIsLoading(true);
+      const res = await menuApi.getAll();
+      if (res && res.data && res.data.length > 0) {
+        const mapped = res.data.map((item) => {
+          const p = parseFloat(item.price) || 0;
+          const c = parseFloat(item.cost_price || item.costPrice || p * 0.35);
+          const m = p > 0 ? Math.round(((p - c) / p) * 100) : 50;
+          const col = m >= 60 ? '#10B981' : m >= 40 ? '#F59E0B' : '#EF4444';
+          return {
+            id: item.menu_id || item.id,
+            name: item.item_name || item.name,
+            category: item.category || 'Mains',
+            price: p,
+            costPrice: c,
+            profitMargin: m,
+            prepTime: item.prep_time || item.prepTime || 15,
+            inStock: item.in_stock !== undefined ? Boolean(item.in_stock) : true,
+            color: col,
+            description: item.description || ''
+          };
+        });
+        setDishes(mapped);
+      }
+      if (!silent) showToast('Data refreshed from PostgreSQL!');
+    } catch (err) {
+      console.warn('Could not load menu items from PostgreSQL:', err.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   // Load from PostgreSQL API on mount
   useEffect(() => {
-    const fetchCatalog = async () => {
-      try {
-        setIsLoading(true);
-        const res = await menuApi.getAll();
-        if (res && res.data && res.data.length > 0) {
-          const mapped = res.data.map((item) => {
-            const p = parseFloat(item.price) || 0;
-            const c = parseFloat(item.cost_price || item.costPrice || p * 0.35);
-            const m = p > 0 ? Math.round(((p - c) / p) * 100) : 50;
-            const col = m >= 60 ? '#10B981' : m >= 40 ? '#F59E0B' : '#EF4444';
-            return {
-              id: item.menu_id || item.id,
-              name: item.item_name || item.name,
-              category: item.category || 'Mains',
-              price: p,
-              costPrice: c,
-              profitMargin: m,
-              prepTime: item.prep_time || item.prepTime || 15,
-              inStock: item.in_stock !== undefined ? Boolean(item.in_stock) : true,
-              color: col,
-              description: item.description || ''
-            };
-          });
-          setDishes(mapped);
-        }
-      } catch (err) {
-        console.warn('Could not load menu items from PostgreSQL:', err.message);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchCatalog();
+    fetchCatalog(true);
   }, []);
 
   const showToast = (msg) => {
@@ -428,16 +430,23 @@ export default function ExecutiveAnalytics() {
           </p>
         </div>
 
-        {/* Search bar with exact vertical centering */}
-        <div className="relative w-full sm:w-64 flex items-center">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3 pointer-events-none" />
-          <input
-            type="text"
-            placeholder="Search metrics..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full h-10 pl-9 pr-3 bg-white border border-slate-300 rounded-xl text-xs text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all shadow-xs font-medium leading-none"
-          />
+        {/* Header Action Controls (Replaces Search Bar) */}
+        <div className="flex items-center gap-2.5 self-stretch sm:self-auto justify-end">
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold shadow-xs">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+            <span>PostgreSQL Live</span>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => fetchCatalog(false)}
+            disabled={isLoading}
+            className="h-10 px-3.5 rounded-xl bg-white hover:bg-slate-50 border border-slate-300 text-xs font-bold text-slate-700 shadow-xs flex items-center gap-2 transition-all cursor-pointer disabled:opacity-50"
+            title="Refresh metrics from PostgreSQL"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin text-blue-600' : 'text-slate-500'}`} />
+            <span>{isLoading ? 'Syncing...' : 'Refresh'}</span>
+          </button>
         </div>
       </div>
 
