@@ -7,7 +7,14 @@ import {
   UtensilsCrossed,
   Download,
   ArrowUpRight,
-  ArrowDownRight
+  ArrowDownRight,
+  Plus,
+  X,
+  CheckCircle2,
+  AlertCircle,
+  Filter,
+  Trash2,
+  Sparkles
 } from 'lucide-react';
 import {
   BarChart,
@@ -24,22 +31,32 @@ import {
 export default function ExecutiveAnalytics() {
   const [timeRange, setTimeRange] = useState('Week');
   const [searchQuery, setSearchQuery] = useState('');
+  const [stockFilter, setStockFilter] = useState('all'); // 'all' | 'in-stock' | 'out-of-stock'
+  const [categoryFilter, setCategoryFilter] = useState('all'); // 'all' | 'Mains' | 'Starters' | 'Desserts' | 'Drinks'
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [toastMessage, setToastMessage] = useState(null);
 
-  // Table items with interactive stock toggles
+  // Initial dishes list
   const [dishes, setDishes] = useState([
     {
       id: 1,
       name: 'Truffle Risotto',
       category: 'Mains',
+      price: 890,
+      costPrice: 280,
       profitMargin: 68,
+      prepTime: 22,
       inStock: true,
       color: '#10B981'
     },
     {
       id: 2,
-      name: 'Atlantic Salmon',
+      name: 'Pan-Seared Sea Bass',
       category: 'Mains',
-      profitMargin: 52,
+      price: 1450,
+      costPrice: 520,
+      profitMargin: 64,
+      prepTime: 25,
       inStock: true,
       color: '#10B981'
     },
@@ -47,7 +64,10 @@ export default function ExecutiveAnalytics() {
       id: 3,
       name: 'Wagyu Beef Carpaccio',
       category: 'Starters',
+      price: 780,
+      costPrice: 195,
       profitMargin: 75,
+      prepTime: 14,
       inStock: false,
       color: '#10B981'
     },
@@ -55,16 +75,117 @@ export default function ExecutiveAnalytics() {
       id: 4,
       name: 'Artisan Burrata',
       category: 'Starters',
+      price: 690,
+      costPrice: 407,
       profitMargin: 41,
+      prepTime: 12,
       inStock: true,
       color: '#F59E0B'
+    },
+    {
+      id: 5,
+      name: 'NZ Lamb Shanks',
+      category: 'Mains',
+      price: 1250,
+      costPrice: 480,
+      profitMargin: 62,
+      prepTime: 30,
+      inStock: true,
+      color: '#10B981'
+    },
+    {
+      id: 6,
+      name: 'Valrhona Chocolate Fondant',
+      category: 'Desserts',
+      price: 520,
+      costPrice: 140,
+      profitMargin: 73,
+      prepTime: 18,
+      inStock: true,
+      color: '#10B981'
+    },
+    {
+      id: 7,
+      name: 'Botanical Hibiscus Spritz',
+      category: 'Drinks',
+      price: 420,
+      costPrice: 80,
+      profitMargin: 81,
+      prepTime: 8,
+      inStock: true,
+      color: '#10B981'
     }
   ]);
 
+  // New Dish Form State
+  const [newDish, setNewDish] = useState({
+    name: '',
+    category: 'Mains',
+    price: '',
+    costPrice: '',
+    prepTime: 15,
+    inStock: true,
+    description: ''
+  });
+
+  const showToast = (msg) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 3000);
+  };
+
   const toggleStock = (id) => {
     setDishes((prev) =>
-      prev.map((d) => (d.id === id ? { ...d, inStock: !d.inStock } : d))
+      prev.map((d) => {
+        if (d.id === id) {
+          const newStatus = !d.inStock;
+          showToast(`${d.name} is now ${newStatus ? 'In Stock' : 'Out of Stock (86\'d)'}`);
+          return { ...d, inStock: newStatus };
+        }
+        return d;
+      })
     );
+  };
+
+  const handleDeleteDish = (id, name) => {
+    setDishes((prev) => prev.filter((d) => d.id !== id));
+    showToast(`Removed "${name}" from menu`);
+  };
+
+  const handleAddDishSubmit = (e) => {
+    e.preventDefault();
+    if (!newDish.name.trim()) return;
+
+    const priceNum = parseFloat(newDish.price) || 0;
+    const costNum = parseFloat(newDish.costPrice) || (priceNum * 0.35);
+    const margin = priceNum > 0 ? Math.round(((priceNum - costNum) / priceNum) * 100) : 50;
+
+    const color = margin >= 60 ? '#10B981' : margin >= 40 ? '#F59E0B' : '#EF4444';
+
+    const createdDish = {
+      id: Date.now(),
+      name: newDish.name.trim(),
+      category: newDish.category,
+      price: priceNum,
+      costPrice: costNum,
+      profitMargin: Math.max(0, Math.min(100, margin)),
+      prepTime: parseInt(newDish.prepTime, 10) || 15,
+      inStock: Boolean(newDish.inStock),
+      color: color,
+      description: newDish.description.trim()
+    };
+
+    setDishes((prev) => [createdDish, ...prev]);
+    setIsAddModalOpen(false);
+    setNewDish({
+      name: '',
+      category: 'Mains',
+      price: '',
+      costPrice: '',
+      prepTime: 15,
+      inStock: true,
+      description: ''
+    });
+    showToast(`"${createdDish.name}" added to menu!`);
   };
 
   // Bar Chart Data matching Image 1 ($0, $5k, $10k, $15k)
@@ -108,10 +229,24 @@ export default function ExecutiveAnalytics() {
     document.body.removeChild(link);
   };
 
-  const filteredDishes = dishes.filter((d) =>
-    d.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    d.category.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredDishes = dishes.filter((d) => {
+    const matchesSearch =
+      d.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      d.category.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesStock =
+      stockFilter === 'all'
+        ? true
+        : stockFilter === 'in-stock'
+        ? d.inStock
+        : !d.inStock;
+    const matchesCategory =
+      categoryFilter === 'all' ? true : d.category === categoryFilter;
+
+    return matchesSearch && matchesStock && matchesCategory;
+  });
+
+  const totalInStock = dishes.filter((d) => d.inStock).length;
+  const totalOutOfStock = dishes.filter((d) => !d.inStock).length;
 
   return (
     <div className="space-y-5 sm:space-y-6">
@@ -330,79 +465,378 @@ export default function ExecutiveAnalytics() {
         </div>
       </div>
 
+      {/* Toast Notification Banner */}
+      {toastMessage && (
+        <div className="fixed top-5 right-5 z-50 flex items-center gap-2.5 px-4 py-3 rounded-2xl bg-slate-900 text-white text-xs font-semibold shadow-xl border border-slate-700 animate-in fade-in slide-in-from-top-3">
+          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+          <span>{toastMessage}</span>
+        </div>
+      )}
+
       {/* Bottom Table: Dish Margin & Stock */}
-      <div className="bg-white rounded-2xl p-5 sm:p-6 border border-slate-200/90 shadow-[0_4px_16px_rgba(0,0,0,0.05),0_1px_3px_rgba(0,0,0,0.03)]">
-        <div className="flex items-center justify-between pb-4 border-b border-slate-100 gap-2">
-          <h2 className="text-base font-bold text-slate-900 leading-none">Dish Margin & Stock</h2>
-          <button
-            onClick={handleExportCSV}
-            className="h-8 px-3.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-xs font-semibold text-slate-700 transition-colors shadow-xs flex items-center justify-center gap-1.5 shrink-0"
-          >
-            <Download className="w-3.5 h-3.5" />
-            <span className="leading-none">Export CSV</span>
-          </button>
+      <div className="bg-white rounded-2xl p-5 sm:p-6 border border-slate-200/90 shadow-[0_4px_16px_rgba(0,0,0,0.05),0_1px_3px_rgba(0,0,0,0.03)] space-y-4">
+        {/* Header & Actions */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-100 gap-3">
+          <div className="flex items-center gap-3">
+            <div>
+              <h2 className="text-base font-bold text-slate-900 leading-none">Dish Margin & Stock</h2>
+              <p className="text-[11px] text-slate-500 mt-1">Real-time inventory toggling & dish profitability.</p>
+            </div>
+            <div className="flex items-center gap-1.5 ml-2">
+              <span className="px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold">
+                {totalInStock} In Stock
+              </span>
+              {totalOutOfStock > 0 && (
+                <span className="px-2.5 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200 text-[10px] font-bold">
+                  {totalOutOfStock} 86'd Out
+                </span>
+              )}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 self-stretch sm:self-auto justify-end">
+            <button
+              onClick={() => setIsAddModalOpen(true)}
+              className="h-8 px-3.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold transition-all shadow-xs flex items-center justify-center gap-1.5 shrink-0 cursor-pointer"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span className="leading-none">Add New Dish</span>
+            </button>
+
+            <button
+              onClick={handleExportCSV}
+              className="h-8 px-3 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-xs font-semibold text-slate-700 transition-colors shadow-xs flex items-center justify-center gap-1.5 shrink-0"
+              title="Download CSV"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span className="leading-none hidden sm:inline">Export CSV</span>
+            </button>
+          </div>
         </div>
 
-        <div className="mt-4 overflow-x-auto">
-          <table className="w-full text-left border-collapse text-xs min-w-[500px]">
+        {/* Filters Bar */}
+        <div className="flex flex-wrap items-center justify-between gap-2.5 text-xs pb-1">
+          {/* Stock status filter tabs */}
+          <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl">
+            <button
+              type="button"
+              onClick={() => setStockFilter('all')}
+              className={`px-3 py-1 rounded-lg font-semibold transition-all ${
+                stockFilter === 'all'
+                  ? 'bg-white text-slate-900 shadow-xs'
+                  : 'text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              All ({dishes.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setStockFilter('in-stock')}
+              className={`px-3 py-1 rounded-lg font-semibold transition-all ${
+                stockFilter === 'in-stock'
+                  ? 'bg-white text-emerald-700 shadow-xs'
+                  : 'text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              In Stock ({totalInStock})
+            </button>
+            <button
+              type="button"
+              onClick={() => setStockFilter('out-of-stock')}
+              className={`px-3 py-1 rounded-lg font-semibold transition-all ${
+                stockFilter === 'out-of-stock'
+                  ? 'bg-white text-rose-700 shadow-xs'
+                  : 'text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              Out of Stock ({totalOutOfStock})
+            </button>
+          </div>
+
+          {/* Category filter pills */}
+          <div className="flex items-center gap-1 overflow-x-auto">
+            {['all', 'Mains', 'Starters', 'Desserts', 'Drinks'].map((cat) => (
+              <button
+                key={cat}
+                type="button"
+                onClick={() => setCategoryFilter(cat)}
+                className={`px-2.5 py-1 rounded-lg font-medium transition-all ${
+                  categoryFilter === cat
+                    ? 'bg-slate-900 text-white font-semibold'
+                    : 'text-slate-500 hover:text-slate-900 bg-slate-50 border border-slate-200/70'
+                }`}
+              >
+                {cat === 'all' ? 'All Categories' : cat}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Table Content */}
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse text-xs min-w-[550px]">
             <thead>
               <tr className="text-[11px] font-bold uppercase tracking-wider text-slate-400 border-b border-slate-100">
                 <th className="py-3 px-3">DISH NAME</th>
                 <th className="py-3 px-3">CATEGORY</th>
                 <th className="py-3 px-3">PROFIT MARGIN</th>
-                <th className="py-3 px-3 text-right">STATUS</th>
+                <th className="py-3 px-3 text-right">IN STOCK / 86'D</th>
+                <th className="py-3 px-2 text-right"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {filteredDishes.map((dish) => (
-                <tr key={dish.id} className="hover:bg-slate-50/80 transition-colors">
-                  <td className="py-4 px-3 font-bold text-slate-900">{dish.name}</td>
-                  <td className="py-4 px-3 text-slate-500 font-medium">{dish.category}</td>
-                  <td className="py-4 px-3">
-                    <div className="flex items-center gap-3">
-                      <div className="w-14 h-2 rounded-full bg-slate-100 overflow-hidden border border-slate-200/50 shrink-0">
-                        <div
-                          className="h-full rounded-full"
-                          style={{
-                            width: `${dish.profitMargin}%`,
-                            backgroundColor: dish.color
-                          }}
-                        ></div>
-                      </div>
-                      <span className="text-slate-700 font-bold leading-none">{dish.profitMargin}%</span>
-                    </div>
-                  </td>
-                  <td className="py-4 px-3 text-right">
-                    <div className="inline-flex items-center justify-end gap-2.5">
-                      {/* Toggle Switch */}
-                      <button
-                        onClick={() => toggleStock(dish.id)}
-                        className={`w-10 h-5 rounded-full p-0.5 transition-colors duration-200 ease-in-out relative flex items-center cursor-pointer shadow-xs shrink-0 ${
-                          dish.inStock ? 'bg-black' : 'bg-slate-300'
-                        }`}
-                        aria-label={`Toggle ${dish.name} stock`}
-                      >
-                        <span
-                          className={`w-4 h-4 rounded-full bg-white shadow-sm transform transition-transform duration-200 ease-in-out ${
-                            dish.inStock ? 'translate-x-5' : 'translate-x-0'
-                          }`}
-                        />
-                      </button>
-                      <span
-                        className={`w-14 text-left text-xs font-bold leading-none ${
-                          dish.inStock ? 'text-slate-900' : 'text-slate-400'
-                        }`}
-                      >
-                        {dish.inStock ? 'In Stock' : 'Out'}
-                      </span>
-                    </div>
+              {filteredDishes.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="py-8 text-center text-slate-400">
+                    No dishes found matching criteria.
                   </td>
                 </tr>
-              ))}
+              ) : (
+                filteredDishes.map((dish) => (
+                  <tr key={dish.id} className="hover:bg-slate-50/80 transition-colors group">
+                    <td className="py-3.5 px-3">
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-slate-900">{dish.name}</span>
+                        {dish.price > 0 && (
+                          <span className="text-[11px] text-slate-400 font-mono font-medium">
+                            ₹{dish.price}
+                          </span>
+                        )}
+                        {dish.prepTime && (
+                          <span className="text-[10px] text-slate-400 font-mono px-1.5 py-0.5 rounded bg-slate-100">
+                            ⏱ {dish.prepTime}m
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="py-3.5 px-3">
+                      <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 font-medium text-[11px]">
+                        {dish.category}
+                      </span>
+                    </td>
+                    <td className="py-3.5 px-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-16 h-2 rounded-full bg-slate-100 overflow-hidden border border-slate-200/50 shrink-0">
+                          <div
+                            className="h-full rounded-full transition-all duration-300"
+                            style={{
+                              width: `${dish.profitMargin}%`,
+                              backgroundColor: dish.color
+                            }}
+                          ></div>
+                        </div>
+                        <span className="text-slate-700 font-bold leading-none font-mono">
+                          {dish.profitMargin}%
+                        </span>
+                      </div>
+                    </td>
+                    <td className="py-3.5 px-3 text-right">
+                      <div className="inline-flex items-center justify-end gap-2.5">
+                        {/* Interactive Toggle Switch */}
+                        <button
+                          type="button"
+                          onClick={() => toggleStock(dish.id)}
+                          className={`w-11 h-6 rounded-full p-1 transition-colors duration-200 ease-in-out relative flex items-center cursor-pointer shadow-xs shrink-0 ${
+                            dish.inStock ? 'bg-emerald-600' : 'bg-slate-300'
+                          }`}
+                          aria-label={`Toggle ${dish.name} stock`}
+                          title={dish.inStock ? 'Click to mark Out of Stock (86)' : 'Click to mark In Stock'}
+                        >
+                          <span
+                            className={`w-4 h-4 rounded-full bg-white shadow-sm transform transition-transform duration-200 ease-in-out ${
+                              dish.inStock ? 'translate-x-5' : 'translate-x-0'
+                            }`}
+                          />
+                        </button>
+                        <span
+                          className={`w-16 text-left text-xs font-bold leading-none select-none ${
+                            dish.inStock ? 'text-emerald-700' : 'text-slate-400'
+                          }`}
+                        >
+                          {dish.inStock ? 'In Stock' : 'Out (86)'}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="py-3.5 px-2 text-right">
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteDish(dish.id, dish.name)}
+                        className="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-rose-600 p-1 rounded-lg hover:bg-rose-50 transition-all cursor-pointer"
+                        title="Delete dish"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
       </div>
+
+      {/* Modal: Add New Dish */}
+      {isAddModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 border border-slate-200/90 shadow-2xl space-y-5 animate-in zoom-in-95">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-slate-100 flex items-center justify-center text-slate-700">
+                  <Plus className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">Add New Menu Dish</h3>
+                  <p className="text-[11px] text-slate-400">Specify pricing, category, and initial inventory state.</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsAddModalOpen(false)}
+                className="w-8 h-8 flex items-center justify-center rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleAddDishSubmit} className="space-y-4 text-xs">
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1.5">
+                  Dish Name <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Pan-Roasted Duck Breast"
+                  value={newDish.name}
+                  onChange={(e) => setNewDish({ ...newDish, name: e.target.value })}
+                  className="w-full h-10 px-3.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 font-medium focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-800 transition-all"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1.5">Category</label>
+                  <select
+                    value={newDish.category}
+                    onChange={(e) => setNewDish({ ...newDish, category: e.target.value })}
+                    className="w-full h-10 px-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 font-medium focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-800 transition-all"
+                  >
+                    <option value="Mains">Mains</option>
+                    <option value="Starters">Starters</option>
+                    <option value="Desserts">Desserts</option>
+                    <option value="Drinks">Drinks</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1.5">Est. Prep Time (mins)</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="120"
+                    value={newDish.prepTime}
+                    onChange={(e) => setNewDish({ ...newDish, prepTime: e.target.value })}
+                    className="w-full h-10 px-3.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 font-medium focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-800 transition-all"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1.5">
+                    Selling Price (₹) <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    required
+                    min="1"
+                    placeholder="e.g. 750"
+                    value={newDish.price}
+                    onChange={(e) => setNewDish({ ...newDish, price: e.target.value })}
+                    className="w-full h-10 px-3.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 font-medium focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-800 transition-all font-mono"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1.5">Cost Price / Food Cost (₹)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    placeholder="e.g. 240"
+                    value={newDish.costPrice}
+                    onChange={(e) => setNewDish({ ...newDish, costPrice: e.target.value })}
+                    className="w-full h-10 px-3.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 font-medium focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-800 transition-all font-mono"
+                  />
+                </div>
+              </div>
+
+              {/* Real-time Margin Preview */}
+              {newDish.price && (
+                <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between">
+                  <span className="text-slate-600 font-medium">Estimated Margin:</span>
+                  <span className="font-bold font-mono text-emerald-700">
+                    {Math.round(
+                      ((parseFloat(newDish.price) - (parseFloat(newDish.costPrice) || parseFloat(newDish.price) * 0.35)) /
+                        parseFloat(newDish.price)) *
+                        100
+                    )}
+                    %
+                  </span>
+                </div>
+              )}
+
+              {/* Initial Stock Toggle in Add Form */}
+              <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-200">
+                <div>
+                  <span className="font-bold text-slate-800 block">Initial Stock Status</span>
+                  <span className="text-[11px] text-slate-500">Available immediately for ordering upon creation.</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setNewDish({ ...newDish, inStock: !newDish.inStock })}
+                  className={`w-11 h-6 rounded-full p-1 transition-colors duration-200 ease-in-out relative flex items-center cursor-pointer shadow-xs shrink-0 ${
+                    newDish.inStock ? 'bg-emerald-600' : 'bg-slate-300'
+                  }`}
+                >
+                  <span
+                    className={`w-4 h-4 rounded-full bg-white shadow-sm transform transition-transform duration-200 ease-in-out ${
+                      newDish.inStock ? 'translate-x-5' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1.5">Description (Optional)</label>
+                <textarea
+                  rows={2}
+                  placeholder="Ingredients, dietary notes or allergen warnings..."
+                  value={newDish.description}
+                  onChange={(e) => setNewDish({ ...newDish, description: e.target.value })}
+                  className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 font-medium focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-800 transition-all"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setIsAddModalOpen(false)}
+                  className="px-4 py-2 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-100 font-semibold transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-semibold shadow-xs transition-all cursor-pointer flex items-center gap-1.5"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Save Dish to Menu</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -3,13 +3,16 @@ import Sidebar from './components/Sidebar';
 import ExecutiveAnalytics from './components/ExecutiveAnalytics';
 import LiveOrdersKDS from './components/LiveOrdersKDS';
 import TableManager from './components/TableManager';
-import { Menu, Activity, Utensils, LayoutGrid } from 'lucide-react';
+import ProfileView from './components/ProfileView';
+import { initialOwnerData } from './data/mockData';
+import { Menu, Activity, Utensils, LayoutGrid, User } from 'lucide-react';
 
 export default function App() {
-  // activeTab: 'analytics' | 'live-orders' | 'tables'
+  // activeTab: 'analytics' | 'live-orders' | 'tables' | 'profile'
   const [activeTab, setActiveTab] = useState('analytics');
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(true);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [ownerData, setOwnerData] = useState(initialOwnerData);
 
   const getPageTitle = () => {
     switch (activeTab) {
@@ -19,6 +22,8 @@ export default function App() {
         return 'Lumiere Kitchen';
       case 'tables':
         return 'Table Manager';
+      case 'profile':
+        return 'Owner Profile & Settings';
       default:
         return 'Bistro BI';
     }
@@ -31,12 +36,15 @@ export default function App() {
         <div className="flex items-center gap-3">
           <button
             onClick={() => setMobileOpen(true)}
-            className="w-9 h-9 flex items-center justify-center -ml-1 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-xl transition-colors"
+            className="w-9 h-9 flex items-center justify-center -ml-1 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
             aria-label="Open navigation menu"
           >
             <Menu className="w-5 h-5" />
           </button>
-          <div className="flex items-center gap-2.5">
+          <div
+            onClick={() => setActiveTab('profile')}
+            className="flex items-center gap-2.5 cursor-pointer"
+          >
             <div className="w-8 h-8 rounded-full bg-black text-white flex items-center justify-center font-black text-xs tracking-wider shadow-xs shrink-0">
               XD
             </div>
@@ -69,14 +77,17 @@ export default function App() {
           {activeTab === 'analytics' && <ExecutiveAnalytics />}
           {activeTab === 'live-orders' && <LiveOrdersKDS />}
           {activeTab === 'tables' && <TableManager />}
+          {activeTab === 'profile' && (
+            <ProfileView ownerData={ownerData} onUpdateOwner={setOwnerData} />
+          )}
         </div>
       </main>
 
       {/* Mobile Bottom Navigation Bar (for phones / small devices) */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200/90 px-6 h-16 flex items-center justify-around z-30 shadow-[0_-4px_16px_rgba(0,0,0,0.04)]">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200/90 px-4 h-16 flex items-center justify-around z-30 shadow-[0_-4px_16px_rgba(0,0,0,0.04)]">
         <button
           onClick={() => setActiveTab('analytics')}
-          className={`flex flex-col items-center justify-center gap-1 h-full px-3 transition-colors ${
+          className={`flex flex-col items-center justify-center gap-1 h-full px-2 transition-colors cursor-pointer ${
             activeTab === 'analytics'
               ? 'text-blue-600 font-bold'
               : 'text-slate-400 hover:text-slate-600 font-medium'
@@ -88,7 +99,7 @@ export default function App() {
 
         <button
           onClick={() => setActiveTab('live-orders')}
-          className={`flex flex-col items-center justify-center gap-1 h-full px-3 transition-colors ${
+          className={`flex flex-col items-center justify-center gap-1 h-full px-2 transition-colors cursor-pointer ${
             activeTab === 'live-orders'
               ? 'text-blue-600 font-bold'
               : 'text-slate-400 hover:text-slate-600 font-medium'
@@ -100,7 +111,7 @@ export default function App() {
 
         <button
           onClick={() => setActiveTab('tables')}
-          className={`flex flex-col items-center justify-center gap-1 h-full px-3 transition-colors ${
+          className={`flex flex-col items-center justify-center gap-1 h-full px-2 transition-colors cursor-pointer ${
             activeTab === 'tables'
               ? 'text-blue-600 font-bold'
               : 'text-slate-400 hover:text-slate-600 font-medium'
@@ -108,6 +119,18 @@ export default function App() {
         >
           <LayoutGrid className="w-5 h-5" />
           <span className="text-[10px] leading-none">Tables</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('profile')}
+          className={`flex flex-col items-center justify-center gap-1 h-full px-2 transition-colors cursor-pointer ${
+            activeTab === 'profile'
+              ? 'text-blue-600 font-bold'
+              : 'text-slate-400 hover:text-slate-600 font-medium'
+          }`}
+        >
+          <User className="w-5 h-5" />
+          <span className="text-[10px] leading-none">Profile</span>
         </button>
       </nav>
     </div>
