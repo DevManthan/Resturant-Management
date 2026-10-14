@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Search,
   Wallet,
@@ -14,7 +14,11 @@ import {
   AlertCircle,
   Filter,
   Trash2,
-  Sparkles
+  Edit2,
+  Pencil,
+  Save,
+  Sparkles,
+  RefreshCw
 } from 'lucide-react';
 import {
   BarChart,
@@ -27,6 +31,7 @@ import {
   Pie,
   Cell
 } from 'recharts';
+import { menuApi, reportsApi } from '../services/api';
 
 export default function ExecutiveAnalytics() {
   const [timeRange, setTimeRange] = useState('Week');
@@ -34,9 +39,11 @@ export default function ExecutiveAnalytics() {
   const [stockFilter, setStockFilter] = useState('all'); // 'all' | 'in-stock' | 'out-of-stock'
   const [categoryFilter, setCategoryFilter] = useState('all'); // 'all' | 'Mains' | 'Starters' | 'Desserts' | 'Drinks'
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
 
-  // Initial dishes list
+  // Initial dishes list (augmented from PostgreSQL)
   const [dishes, setDishes] = useState([
     {
       id: 1,
@@ -47,7 +54,8 @@ export default function ExecutiveAnalytics() {
       profitMargin: 68,
       prepTime: 22,
       inStock: true,
-      color: '#10B981'
+      color: '#10B981',
+      description: 'Arborio rice cooked with black truffle butter, forest mushrooms, and aged Parmigiano Reggiano.'
     },
     {
       id: 2,
@@ -58,7 +66,8 @@ export default function ExecutiveAnalytics() {
       profitMargin: 64,
       prepTime: 25,
       inStock: true,
-      color: '#10B981'
+      color: '#10B981',
+      description: 'Glazed in lemon beurre blanc with asparagus spear emulsion.'
     },
     {
       id: 3,
@@ -69,7 +78,8 @@ export default function ExecutiveAnalytics() {
       profitMargin: 75,
       prepTime: 14,
       inStock: false,
-      color: '#10B981'
+      color: '#10B981',
+      description: 'Thinly sliced wagyu tenderloin, citrus vinaigrette, crisp shallots.'
     },
     {
       id: 4,
@@ -80,7 +90,8 @@ export default function ExecutiveAnalytics() {
       profitMargin: 41,
       prepTime: 12,
       inStock: true,
-      color: '#F59E0B'
+      color: '#F59E0B',
+      description: 'Handmade cream burrata, heirloom tomatoes, sourdough.'
     },
     {
       id: 5,
@@ -91,7 +102,8 @@ export default function ExecutiveAnalytics() {
       profitMargin: 62,
       prepTime: 30,
       inStock: true,
-      color: '#10B981'
+      color: '#10B981',
+      description: '12-hour braised shank in rosemary jus on potato mash.'
     },
     {
       id: 6,
@@ -102,7 +114,8 @@ export default function ExecutiveAnalytics() {
       profitMargin: 73,
       prepTime: 18,
       inStock: true,
-      color: '#10B981'
+      color: '#10B981',
+      description: '70% French chocolate lava heart with vanilla gelato.'
     },
     {
       id: 7,
@@ -113,9 +126,22 @@ export default function ExecutiveAnalytics() {
       profitMargin: 81,
       prepTime: 8,
       inStock: true,
-      color: '#10B981'
+      color: '#10B981',
+      description: 'Artisanal hibiscus reduction, rosemary smoke, tonic.'
     }
   ]);
+
+  // Editing Dish State
+  const [editingDish, setEditingDish] = useState({
+    id: null,
+    name: '',
+    category: 'Mains',
+    price: '',
+    costPrice: '',
+    prepTime: 15,
+    inStock: true,
+    description: ''
+  });
 
   // New Dish Form State
   const [newDish, setNewDish] = useState({
@@ -128,41 +154,146 @@ export default function ExecutiveAnalytics() {
     description: ''
   });
 
+  // Load from PostgreSQL API on mount
+  useEffect(() => {
+    const fetchCatalog = async () => {
+      try {
+        setIsLoading(true);
+        const res = await menuApi.getAll();
+        if (res && res.data && res.data.length > 0) {
+          const mapped = res.data.map((item) => {
+            const p = parseFloat(item.price) || 0;
+            const c = parseFloat(item.cost_price || item.costPrice || p * 0.35);
+            const m = p > 0 ? Math.round(((p - c) / p) * 100) : 50;
+            const col = m >= 60 ? '#10B981' : m >= 40 ? '#F59E0B' : '#EF4444';
+            return {
+              id: item.menu_id || item.id,
+              name: item.item_name || item.name,
+              category: item.category || 'Mains',
+              price: p,
+              costPrice: c,
+              profitMargin: m,
+              prepTime: item.prep_time || item.prepTime || 15,
+              inStock: item.in_stock !== undefined ? Boolean(item.in_stock) : true,
+              color: col,
+              description: item.description || ''
+            };
+          });
+          setDishes(mapped);
+        }
+      } catch (err) {
+        console.warn('Could not load menu items from PostgreSQL:', err.message);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchCatalog();
+  }, []);
+
   const showToast = (msg) => {
     setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 3000);
+    setTimeout(() => setToastMessage(null), 3500);
   };
 
-  const toggleStock = (id) => {
+  // Toggle in-stock / out-of-stock and persist to PostgreSQL
+  const toggleStock = async (id) => {
+    const current = dishes.find((d) => d.id === id);
+    if (!current) return;
+    const newStatus = !current.inStock;
+
+    // Optimistic UI update
     setDishes((prev) =>
-      prev.map((d) => {
-        if (d.id === id) {
-          const newStatus = !d.inStock;
-          showToast(`${d.name} is now ${newStatus ? 'In Stock' : 'Out of Stock (86\'d)'}`);
-          return { ...d, inStock: newStatus };
-        }
-        return d;
-      })
+      prev.map((d) => (d.id === id ? { ...d, inStock: newStatus } : d))
     );
+    showToast(`${current.name} is now ${newStatus ? 'In Stock' : 'Out of Stock (86\'d)'}`);
+
+    try {
+      await menuApi.toggleStock(id, newStatus);
+    } catch (err) {
+      console.warn('Failed to update stock in PostgreSQL:', err.message);
+    }
   };
 
-  const handleDeleteDish = (id, name) => {
+  // Open Edit Modal with selected dish data
+  const handleOpenEditModal = (dish) => {
+    setEditingDish({
+      id: dish.id,
+      name: dish.name,
+      category: dish.category,
+      price: dish.price,
+      costPrice: dish.costPrice,
+      prepTime: dish.prepTime,
+      inStock: Boolean(dish.inStock),
+      description: dish.description || ''
+    });
+    setIsEditModalOpen(true);
+  };
+
+  // Submit Edit Dish to PostgreSQL
+  const handleEditDishSubmit = async (e) => {
+    e.preventDefault();
+    if (!editingDish.name.trim() || !editingDish.id) return;
+
+    const priceNum = parseFloat(editingDish.price) || 0;
+    const costNum = parseFloat(editingDish.costPrice) || (priceNum * 0.35);
+    const margin = priceNum > 0 ? Math.round(((priceNum - costNum) / priceNum) * 100) : 50;
+    const color = margin >= 60 ? '#10B981' : margin >= 40 ? '#F59E0B' : '#EF4444';
+
+    const updated = {
+      ...editingDish,
+      price: priceNum,
+      costPrice: costNum,
+      profitMargin: Math.max(0, Math.min(100, margin)),
+      prepTime: parseInt(editingDish.prepTime, 10) || 15,
+      color
+    };
+
+    // Optimistic UI update
+    setDishes((prev) => prev.map((d) => (d.id === editingDish.id ? updated : d)));
+    setIsEditModalOpen(false);
+    showToast(`"${updated.name}" updated in PostgreSQL!`);
+
+    try {
+      await menuApi.update(editingDish.id, {
+        item_name: updated.name,
+        category: updated.category,
+        price: updated.price,
+        cost_price: updated.costPrice,
+        prep_time: updated.prepTime,
+        in_stock: updated.inStock,
+        description: updated.description
+      });
+    } catch (err) {
+      console.warn('Failed to update dish in PostgreSQL:', err.message);
+    }
+  };
+
+  // Delete dish from PostgreSQL
+  const handleDeleteDish = async (id, name) => {
     setDishes((prev) => prev.filter((d) => d.id !== id));
     showToast(`Removed "${name}" from menu`);
+
+    try {
+      await menuApi.delete(id);
+    } catch (err) {
+      console.warn('Failed to delete dish in PostgreSQL:', err.message);
+    }
   };
 
-  const handleAddDishSubmit = (e) => {
+  // Add new dish to PostgreSQL
+  const handleAddDishSubmit = async (e) => {
     e.preventDefault();
     if (!newDish.name.trim()) return;
 
     const priceNum = parseFloat(newDish.price) || 0;
     const costNum = parseFloat(newDish.costPrice) || (priceNum * 0.35);
     const margin = priceNum > 0 ? Math.round(((priceNum - costNum) / priceNum) * 100) : 50;
-
     const color = margin >= 60 ? '#10B981' : margin >= 40 ? '#F59E0B' : '#EF4444';
 
+    const tempId = Date.now();
     const createdDish = {
-      id: Date.now(),
+      id: tempId,
       name: newDish.name.trim(),
       category: newDish.category,
       price: priceNum,
@@ -185,21 +316,57 @@ export default function ExecutiveAnalytics() {
       inStock: true,
       description: ''
     });
-    showToast(`"${createdDish.name}" added to menu!`);
+    showToast(`"${createdDish.name}" saved to PostgreSQL!`);
+
+    try {
+      const res = await menuApi.add({
+        item_name: createdDish.name,
+        category: createdDish.category,
+        price: createdDish.price,
+        cost_price: createdDish.costPrice,
+        prep_time: createdDish.prepTime,
+        in_stock: createdDish.inStock,
+        description: createdDish.description
+      });
+      if (res && res.data && res.data.menu_id) {
+        setDishes((prev) =>
+          prev.map((d) => (d.id === tempId ? { ...d, id: res.data.menu_id } : d))
+        );
+      }
+    } catch (err) {
+      console.warn('Failed to insert dish in PostgreSQL:', err.message);
+    }
   };
 
-  // Bar Chart Data matching Image 1 ($0, $5k, $10k, $15k)
-  const barData = [
-    { day: 'Mon', revenue: 4500 },
-    { day: 'Tue', revenue: 7600 },
-    { day: 'Wed', revenue: 3800 },
-    { day: 'Thu', revenue: 10200 },
-    { day: 'Fri', revenue: 13100 },
-    { day: 'Sat', revenue: 14800 },
-    { day: 'Sun', revenue: 8400 }
-  ];
+  // Interactive Bar Chart Data based on timeRange button ('Day' | 'Week' | 'Month')
+  const barDataByRange = {
+    Day: [
+      { day: '12 PM', revenue: 1800 },
+      { day: '2 PM', revenue: 3200 },
+      { day: '4 PM', revenue: 1400 },
+      { day: '6 PM', revenue: 4100 },
+      { day: '8 PM', revenue: 6800 },
+      { day: '10 PM', revenue: 5200 }
+    ],
+    Week: [
+      { day: 'Mon', revenue: 4500 },
+      { day: 'Tue', revenue: 7600 },
+      { day: 'Wed', revenue: 3800 },
+      { day: 'Thu', revenue: 10200 },
+      { day: 'Fri', revenue: 13100 },
+      { day: 'Sat', revenue: 14800 },
+      { day: 'Sun', revenue: 8400 }
+    ],
+    Month: [
+      { day: 'Week 1', revenue: 32400 },
+      { day: 'Week 2', revenue: 41800 },
+      { day: 'Week 3', revenue: 38200 },
+      { day: 'Week 4', revenue: 46900 }
+    ]
+  };
+  const barData = barDataByRange[timeRange] || barDataByRange.Week;
 
-  // Donut Chart Data matching Image 1 (Mains 45%, Starters 30%, Drinks 15%, Desserts 10%)
+  // Donut Chart Data (Mains 45%, Starters 30%, Drinks 15%, Desserts 10%)
   const donutData = [
     { name: 'Mains', value: 45, color: '#334155' },
     { name: 'Starters', value: 30, color: '#94A3B8' },
@@ -658,14 +825,24 @@ export default function ExecutiveAnalytics() {
                       </div>
                     </td>
                     <td className="py-3.5 px-2 text-right">
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteDish(dish.id, dish.name)}
-                        className="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-rose-600 p-1 rounded-lg hover:bg-rose-50 transition-all cursor-pointer"
-                        title="Delete dish"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                      <div className="flex items-center justify-end gap-1">
+                        <button
+                          type="button"
+                          onClick={() => handleOpenEditModal(dish)}
+                          className="text-slate-400 hover:text-slate-800 p-1.5 rounded-lg hover:bg-slate-100 transition-all cursor-pointer"
+                          title={`Edit ${dish.name} & stock`}
+                        >
+                          <Edit2 className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteDish(dish.id, dish.name)}
+                          className="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-rose-600 p-1.5 rounded-lg hover:bg-rose-50 transition-all cursor-pointer"
+                          title="Delete dish"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -831,6 +1008,182 @@ export default function ExecutiveAnalytics() {
                 >
                   <Plus className="w-3.5 h-3.5" />
                   <span>Save Dish to Menu</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Dish Modal with In Stock / Out of Stock Option */}
+      {isEditModalOpen && editingDish && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 border border-slate-200/90 shadow-2xl relative text-xs">
+            <div className="flex items-center justify-between pb-4 mb-4 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600">
+                  <Pencil className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900 leading-tight">Edit Dish & Stock Status</h3>
+                  <p className="text-[11px] text-slate-500 font-medium">Update item details and toggle live stock availability.</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsEditModalOpen(false)}
+                className="w-7 h-7 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 flex items-center justify-center transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleEditDishSubmit} className="space-y-4">
+              {/* Dish Name */}
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1.5">Dish Name</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Truffle Mushroom Tagliatelle"
+                  value={editingDish.name}
+                  onChange={(e) => setEditingDish({ ...editingDish, name: e.target.value })}
+                  className="w-full h-10 px-3.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 font-medium focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-800 transition-all"
+                />
+              </div>
+
+              {/* Stock Status Selector (Requested by user: In Stock / Out of Stock selector) */}
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1.5">Stock Availability Status</label>
+                <div className="grid grid-cols-2 gap-2.5 p-1 bg-slate-100 rounded-xl border border-slate-200/80">
+                  <button
+                    type="button"
+                    onClick={() => setEditingDish({ ...editingDish, inStock: true })}
+                    className={`flex items-center justify-center gap-2 py-2 px-3 rounded-lg font-semibold transition-all cursor-pointer ${
+                      editingDish.inStock
+                        ? 'bg-white text-emerald-700 shadow-sm border border-emerald-200 font-bold'
+                        : 'text-slate-500 hover:text-slate-800'
+                    }`}
+                  >
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+                    <span>In Stock (Available)</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditingDish({ ...editingDish, inStock: false })}
+                    className={`flex items-center justify-center gap-2 py-2 px-3 rounded-lg font-semibold transition-all cursor-pointer ${
+                      !editingDish.inStock
+                        ? 'bg-white text-rose-700 shadow-sm border border-rose-200 font-bold'
+                        : 'text-slate-500 hover:text-slate-800'
+                    }`}
+                  >
+                    <span className="w-2.5 h-2.5 rounded-full bg-rose-500"></span>
+                    <span>Out of Stock (86'd)</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Category & Prep Time */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1.5">Category</label>
+                  <select
+                    value={editingDish.category}
+                    onChange={(e) => setEditingDish({ ...editingDish, category: e.target.value })}
+                    className="w-full h-10 px-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 font-medium focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-800 transition-all"
+                  >
+                    <option value="Mains">Mains</option>
+                    <option value="Starters">Starters</option>
+                    <option value="Desserts">Desserts</option>
+                    <option value="Drinks">Drinks</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1.5">Est. Prep Time (mins)</label>
+                  <input
+                    type="number"
+                    min="1"
+                    placeholder="15"
+                    value={editingDish.prepTime}
+                    onChange={(e) => setEditingDish({ ...editingDish, prepTime: e.target.value })}
+                    className="w-full h-10 px-3.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 font-medium focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-800 transition-all font-mono"
+                  />
+                </div>
+              </div>
+
+              {/* Price & Cost Price */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1.5">Menu Price (₹)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    required
+                    placeholder="e.g. 580"
+                    value={editingDish.price}
+                    onChange={(e) => setEditingDish({ ...editingDish, price: e.target.value })}
+                    className="w-full h-10 px-3.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 font-medium focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-800 transition-all font-mono"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1.5">Cost Price (₹)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder="e.g. 240"
+                    value={editingDish.costPrice}
+                    onChange={(e) => setEditingDish({ ...editingDish, costPrice: e.target.value })}
+                    className="w-full h-10 px-3.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 font-medium focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-800 transition-all font-mono"
+                  />
+                </div>
+              </div>
+
+              {/* Estimated Margin Indicator */}
+              {editingDish.price && (
+                <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between">
+                  <span className="text-slate-600 font-medium">Estimated Margin:</span>
+                  <span className="font-bold font-mono text-emerald-700">
+                    {Math.round(
+                      ((parseFloat(editingDish.price) - (parseFloat(editingDish.costPrice) || parseFloat(editingDish.price) * 0.35)) /
+                        parseFloat(editingDish.price)) *
+                        100
+                    )}
+                    %
+                  </span>
+                </div>
+              )}
+
+              {/* Description */}
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1.5">Description (Optional)</label>
+                <textarea
+                  rows={2}
+                  placeholder="Ingredients, dietary notes or allergen warnings..."
+                  value={editingDish.description}
+                  onChange={(e) => setEditingDish({ ...editingDish, description: e.target.value })}
+                  className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 font-medium focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-800 transition-all"
+                />
+              </div>
+
+              {/* Actions */}
+              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setIsEditModalOpen(false)}
+                  className="px-4 py-2 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-100 font-semibold transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-semibold shadow-xs transition-all cursor-pointer flex items-center gap-1.5"
+                >
+                  <Save className="w-3.5 h-3.5" />
+                  <span>Update Dish & Stock</span>
                 </button>
               </div>
             </form>

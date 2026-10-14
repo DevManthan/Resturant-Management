@@ -9,6 +9,7 @@ import {
   Check,
   Bell
 } from 'lucide-react';
+import { ordersApi } from '../services/api';
 
 export default function LiveOrdersKDS() {
   const [currentTime, setCurrentTime] = useState('22:26');
@@ -77,7 +78,29 @@ export default function LiveOrdersKDS() {
     }
   ]);
 
-  const advanceOrder = (orderId) => {
+  const toggleItemDone = (orderId, itemIdx) => {
+    setOrders((prev) =>
+      prev.map((order) => {
+        if (order.id !== orderId) return order;
+        const newItems = [...order.items];
+        newItems[itemIdx] = {
+          ...newItems[itemIdx],
+          done: !newItems[itemIdx].done
+        };
+        return { ...order, items: newItems };
+      })
+    );
+  };
+
+  const advanceOrder = async (orderId) => {
+    const currentOrder = orders.find((o) => o.id === orderId);
+    if (!currentOrder) return;
+
+    let nextStatus = '';
+    if (currentOrder.status === 'pending') nextStatus = 'preparing';
+    else if (currentOrder.status === 'preparing') nextStatus = 'ready';
+    else if (currentOrder.status === 'ready') nextStatus = 'completed';
+
     setOrders((prev) =>
       prev
         .map((order) => {
@@ -104,6 +127,12 @@ export default function LiveOrdersKDS() {
         })
         .filter(Boolean)
     );
+
+    try {
+      await ordersApi.updateStatus(orderId, nextStatus);
+    } catch (err) {
+      console.warn('Failed to update order status in PostgreSQL backend:', err.message);
+    }
   };
 
   const pendingOrders = orders.filter((o) => o.status === 'pending');
@@ -314,11 +343,18 @@ export default function LiveOrdersKDS() {
                         {order.items.map((item, idx) => (
                           <div
                             key={idx}
-                            className={`leading-tight ${
+                            onClick={() => toggleItemDone(order.id, idx)}
+                            className={`leading-tight cursor-pointer select-none transition-all hover:opacity-75 flex items-center gap-2 ${
                               item.done ? 'line-through text-slate-400' : 'text-slate-800'
                             }`}
+                            title="Click to toggle item completion"
                           >
-                            {item.name}
+                            <span className={`w-3.5 h-3.5 rounded-md border flex items-center justify-center shrink-0 ${
+                              item.done ? 'bg-blue-600 border-blue-600 text-white' : 'border-slate-300 bg-white'
+                            }`}>
+                              {item.done && <Check className="w-2.5 h-2.5 stroke-[3]" />}
+                            </span>
+                            <span>{item.name}</span>
                           </div>
                         ))}
                       </div>
@@ -389,11 +425,18 @@ export default function LiveOrdersKDS() {
                         {order.items.map((item, idx) => (
                           <div
                             key={idx}
-                            className={`leading-tight ${
+                            onClick={() => toggleItemDone(order.id, idx)}
+                            className={`leading-tight cursor-pointer select-none transition-all hover:opacity-75 flex items-center gap-2 ${
                               item.done ? 'line-through text-slate-400' : 'text-slate-800'
                             }`}
+                            title="Click to toggle item completion"
                           >
-                            {item.name}
+                            <span className={`w-3.5 h-3.5 rounded-md border flex items-center justify-center shrink-0 ${
+                              item.done ? 'bg-emerald-600 border-emerald-600 text-white' : 'border-slate-300 bg-white'
+                            }`}>
+                              {item.done && <Check className="w-2.5 h-2.5 stroke-[3]" />}
+                            </span>
+                            <span>{item.name}</span>
                           </div>
                         ))}
                       </div>

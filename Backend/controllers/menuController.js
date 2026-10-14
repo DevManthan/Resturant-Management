@@ -138,6 +138,68 @@ export const toggleStockStatus = async (req, res) => {
   }
 };
 
+export const updateMenuItem = async (req, res) => {
+  const menuId = parseInt(req.params.id, 10);
+  const {
+    item_name,
+    category,
+    price,
+    cost_price,
+    prep_time,
+    in_stock,
+    description
+  } = req.body;
+
+  try {
+    const updateSql = `
+      UPDATE menu_items SET
+        item_name = COALESCE($1, item_name),
+        category = COALESCE($2, category),
+        price = COALESCE($3, price),
+        cost_price = COALESCE($4, cost_price),
+        prep_time = COALESCE($5, prep_time),
+        in_stock = COALESCE($6, in_stock),
+        description = COALESCE($7, description)
+      WHERE menu_id = $8
+      RETURNING *;
+    `;
+    const dbRes = await query(updateSql, [
+      item_name,
+      category,
+      price !== undefined ? parseFloat(price) : null,
+      cost_price !== undefined ? parseFloat(cost_price) : null,
+      prep_time !== undefined ? parseInt(prep_time, 10) : null,
+      in_stock !== undefined ? Boolean(in_stock) : null,
+      description,
+      menuId
+    ]);
+
+    if (dbRes && dbRes.rows && dbRes.rows.length > 0) {
+      return res.json({ success: true, data: dbRes.rows[0], message: 'Dish updated in PostgreSQL' });
+    }
+
+    const index = mockStore.menu_items.findIndex((m) => m.menu_id === menuId);
+    if (index === -1) {
+      return res.status(404).json({ success: false, error: 'Menu item not found' });
+    }
+
+    mockStore.menu_items[index] = {
+      ...mockStore.menu_items[index],
+      ...(item_name && { item_name }),
+      ...(category && { category }),
+      ...(price !== undefined && { price: parseFloat(price) }),
+      ...(cost_price !== undefined && { cost_price: parseFloat(cost_price) }),
+      ...(prep_time !== undefined && { prep_time: parseInt(prep_time, 10) }),
+      ...(in_stock !== undefined && { in_stock: Boolean(in_stock) }),
+      ...(description !== undefined && { description })
+    };
+
+    return res.json({ success: true, data: mockStore.menu_items[index], message: 'Dish updated successfully' });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+};
+
 export const deleteMenuItem = async (req, res) => {
   const menuId = parseInt(req.params.id, 10);
   try {
@@ -156,3 +218,4 @@ export const deleteMenuItem = async (req, res) => {
     res.status(500).json({ success: false, error: err.message });
   }
 };
+

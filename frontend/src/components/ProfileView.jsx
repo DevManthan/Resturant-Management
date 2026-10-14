@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   User,
   Store,
@@ -17,10 +17,11 @@ import {
   Calendar,
   Sparkles
 } from 'lucide-react';
+import { ownerApi } from '../services/api';
 
 export default function ProfileView({ ownerData, onUpdateOwner }) {
   const [formData, setFormData] = useState({
-    OWNER_ID: ownerData?.OWNER_ID || 101,
+    OWNER_ID: ownerData?.OWNER_ID || 1,
     OWNER_NAME: ownerData?.OWNER_NAME || 'Vikramaditya Singhania',
     EMAIL_ID: ownerData?.EMAIL_ID || 'vikram@luxedine.in',
     PHONE_NO: ownerData?.PHONE_NO || '+91 98765 43210',
@@ -44,13 +45,60 @@ export default function ProfileView({ ownerData, onUpdateOwner }) {
   });
   const [activeSection, setActiveSection] = useState('general');
 
-  const handleSubmit = (e) => {
+  // Load live data from PostgreSQL on mount
+  useEffect(() => {
+    const loadOwner = async () => {
+      try {
+        const res = await ownerApi.get();
+        if (res && res.data) {
+          const d = res.data;
+          setFormData((prev) => ({
+            ...prev,
+            OWNER_ID: d.owner_id || prev.OWNER_ID,
+            OWNER_NAME: d.owner_name || prev.OWNER_NAME,
+            EMAIL_ID: d.email_id || prev.EMAIL_ID,
+            PHONE_NO: d.phone_no || prev.PHONE_NO,
+            RESTAURANT_NAME: d.restaurant_name || prev.RESTAURANT_NAME,
+            ADDRESS: d.address || prev.ADDRESS,
+            GSTIN: d.gstin || prev.GSTIN,
+            CURRENCY: d.currency || prev.CURRENCY,
+            GST_RATE: d.gst_rate || prev.GST_RATE,
+            OPEN_TIME: d.open_time || prev.OPEN_TIME,
+            CLOSE_TIME: d.close_time || prev.CLOSE_TIME,
+            STATUS: d.status || prev.STATUS
+          }));
+        }
+      } catch (err) {
+        console.warn('Could not load owner from PostgreSQL:', err.message);
+      }
+    };
+    loadOwner();
+  }, []);
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (onUpdateOwner) {
       onUpdateOwner(formData);
     }
     setSavedSuccess(true);
     setTimeout(() => setSavedSuccess(false), 3500);
+
+    try {
+      await ownerApi.update({
+        owner_name: formData.OWNER_NAME,
+        restaurant_name: formData.RESTAURANT_NAME,
+        email_id: formData.EMAIL_ID,
+        phone_no: formData.PHONE_NO,
+        address: formData.ADDRESS,
+        gstin: formData.GSTIN,
+        currency: formData.CURRENCY,
+        open_time: formData.OPEN_TIME,
+        close_time: formData.CLOSE_TIME,
+        status: formData.STATUS
+      });
+    } catch (err) {
+      console.warn('Failed to update owner in PostgreSQL:', err.message);
+    }
   };
 
   return (
@@ -95,7 +143,7 @@ export default function ProfileView({ ownerData, onUpdateOwner }) {
               </span>
               <div className="flex items-center gap-1.5 mt-0.5">
                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                <span className="text-xs font-bold text-emerald-700">Oracle DB Connected</span>
+                <span className="text-xs font-bold text-emerald-700">PostgreSQL Connected</span>
               </div>
             </div>
           </div>

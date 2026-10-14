@@ -181,22 +181,31 @@ export const updateOrderStatus = async (req, res) => {
   }
 
   try {
-    const order = mockStore.orders.find((o) => o.order_id === orderId);
-    if (!order) {
-      return res.status(404).json({ success: false, error: 'Order not found' });
-    }
+    // 1. Update in PostgreSQL if table exists
+    const dbRes = await query('UPDATE orders SET order_status = $1, updated_at = NOW() WHERE order_id = $2 RETURNING *', [status, orderId]);
 
-    order.order_status = status;
-    order.updated_at = new Date();
+    // 2. Also keep mockStore in sync
+    const order = mockStore.orders.find((o) => o.order_id === orderId);
+    if (order) {
+      order.order_status = status;
+      order.updated_at = new Date();
+    }
 
     // If order is completed/served, update table status
     if (status === 'completed' || status === 'served') {
-      broadcastTableUpdate({ table_id: order.table_id, status: 'Available' });
+      const tableId = order ? order.table_id : (dbRes && dbRes.rows && dbRes.rows[0]?.table_id);
+      if (tableId) {
+        broadcastTableUpdate({ table_id: tableId, status: 'Available' });
+      }
     }
 
     broadcastKdsUpdate({ type: 'STATUS_UPDATED', orderId, status });
 
-    return res.json({ success: true, data: order, message: `Order #${orderId} status updated to ${status}` });
+    return res.json({
+      success: true,
+      data: (dbRes && dbRes.rows && dbRes.rows[0]) || order,
+      message: `Order #${orderId} status updated to ${status}`
+    });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }

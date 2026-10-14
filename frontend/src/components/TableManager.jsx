@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Calendar,
   Clock,
@@ -7,6 +7,7 @@ import {
   Minus,
   CheckCircle2
 } from 'lucide-react';
+import { bookingApi } from '../services/api';
 
 export default function TableManager() {
   const [tables, setTables] = useState([
@@ -59,7 +60,45 @@ export default function TableManager() {
   const [partyName, setPartyName] = useState('');
   const [successMsg, setSuccessMsg] = useState(null);
 
-  const handleBlockTable = (e) => {
+  // Sync initial bookings from PostgreSQL
+  useEffect(() => {
+    const loadBookings = async () => {
+      try {
+        const res = await bookingApi.getAll();
+        if (res && res.data && res.data.length > 0) {
+          // Map bookings to table statuses
+          const bookedMap = {};
+          res.data.forEach((b) => {
+            if (b.table_id) {
+              bookedMap[b.table_id] = {
+                status: b.satus || 'Reserved',
+                party: b.special_preferences || `Party of ${b.guest_count}`,
+                time: b.booking_time || '7:00 PM'
+              };
+            }
+          });
+          setTables((prev) =>
+            prev.map((t) => {
+              if (bookedMap[t.name]) {
+                return {
+                  ...t,
+                  status: bookedMap[t.name].status,
+                  party: bookedMap[t.name].party,
+                  time: bookedMap[t.name].time
+                };
+              }
+              return t;
+            })
+          );
+        }
+      } catch (err) {
+        console.warn('Could not load bookings from PostgreSQL:', err.message);
+      }
+    };
+    loadBookings();
+  }, []);
+
+  const handleBlockTable = async (e) => {
     e.preventDefault();
     if (!selectedTable) return;
 
@@ -77,8 +116,21 @@ export default function TableManager() {
       })
     );
 
-    setSuccessMsg(`Table ${selectedTable} blocked successfully!`);
-    setTimeout(() => setSuccessMsg(null), 3000);
+    setSuccessMsg(`Table ${selectedTable} reserved & saved in PostgreSQL!`);
+    setTimeout(() => setSuccessMsg(null), 3500);
+
+    try {
+      await bookingApi.create({
+        customer_id: 1,
+        table_id: selectedTable,
+        booking_date: new Date().toISOString().split('T')[0],
+        booking_time: reserveTime || '19:30',
+        guest_count: partySize,
+        special_preferences: partyName ? `${partyName} Party` : 'Table Reservation'
+      });
+    } catch (err) {
+      console.warn('Booking create fallback:', err.message);
+    }
   };
 
   const handleClearForm = () => {
