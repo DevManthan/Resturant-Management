@@ -3,30 +3,81 @@
 @tailwind utilities;
 
 @layer base {
+  html {
+    scroll-behavior: smooth;
+  }
   body {
-    background-color: #FAFAFA;
+    background-color: #FAF8F5;
     color: #1E293B;
     font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
   }
 }
 
-/* Custom soft scrollbar */
+/* Custom soft luxury scrollbar */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 7px;
+  height: 7px;
 }
 ::-webkit-scrollbar-track {
-  background: #F4F4F5;
+  background: #F4F2EC;
 }
 ::-webkit-scrollbar-thumb {
-  background: #CBD5E1;
+  background: #D4CDBE;
   border-radius: 9999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #94A3B8;
+  background: #B88E52;
 }
 
 /* Soft transition utilities */
 .transition-smooth {
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Interactive Button Micro-Animations */
+.btn-luxury {
+  position: relative;
+  overflow: hidden;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.btn-luxury:hover {
+  transform: translateY(-1.5px);
+  box-shadow: 0 10px 25px -4px rgba(184, 142, 82, 0.25), 0 4px 10px -2px rgba(0, 0, 0, 0.05);
+}
+.btn-luxury:active {
+  transform: scale(0.97) translateY(0);
+}
+
+/* Shimmer overlay animation */
+.btn-shimmer::after {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: linear-gradient(
+    60deg,
+    transparent 35%,
+    rgba(255, 255, 255, 0.22) 50%,
+    transparent 65%
+  );
+  transform: translateX(-100%);
+  transition: transform 0.65s ease;
+}
+.btn-shimmer:hover::after {
+  transform: translateX(100%);
+}
+
+/* Subtle pulse glow for highlights */
+@keyframes goldPulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(184, 142, 82, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 10px rgba(184, 142, 82, 0);
+  }
+}
+.animate-gold-pulse {
+  animation: goldPulse 3s infinite;
 }

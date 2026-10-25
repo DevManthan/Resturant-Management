@@ -125,26 +125,32 @@ export default function LiveOrdersKDS() {
     }
   ]);
 
-  // Sync with PostgreSQL KDS queue on mount
+  // Sync with PostgreSQL KDS queue on mount and live polling
   useEffect(() => {
     const loadKdsOrders = async () => {
       try {
         const res = await ordersApi.getKds();
-        if (res && res.data && res.data.length > 0) {
-          // Map backend orders if present
-          const mapped = res.data.map((o) => ({
-            id: String(o.order_id),
-            table: o.table_id?.startsWith('#') ? o.table_id : `#${o.table_id || '101'}`,
-            type: o.booking_id ? 'Dine-In' : 'Online / Takeaway',
-            timeElapsed: '05:00',
-            targetTime: 'Target: 20m',
-            status: o.order_status || 'pending',
-            items: (o.items || []).map((i) => ({
-              name: `${i.quantity}x ${i.item_name}`,
-              done: false,
-              note: i.note || ''
-            }))
-          }));
+        if (res && res.data) {
+          const mapped = res.data.map((o) => {
+            const elapsed = o.sla?.elapsedMinutes || 5;
+            const mins = Math.floor(elapsed);
+            const secs = Math.floor((elapsed - mins) * 60);
+            const timeStr = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+            return {
+              id: String(o.order_id),
+              table: o.table_id?.startsWith('#') ? o.table_id : `#${o.table_id || '101'}`,
+              type: o.booking_id ? 'Dine-In' : (o.special_note?.includes('Uber') ? 'UberEats' : 'Dine-In'),
+              timeElapsed: timeStr,
+              targetTime: o.sla?.isCritical ? 'Overdue' : `Target: ${o.sla?.maxPrepTime || 15}m`,
+              isOverdue: Boolean(o.sla?.isCritical || o.sla?.isSlaBreached),
+              status: o.order_status || 'pending',
+              items: (o.items || []).map((i) => ({
+                name: `${i.quantity}x ${i.item_name}`,
+                done: i.status === 'ready' || i.status === 'completed',
+                note: i.note || ''
+              }))
+            };
+          });
           setOrders(mapped);
         }
       } catch (err) {
@@ -152,6 +158,8 @@ export default function LiveOrdersKDS() {
       }
     };
     loadKdsOrders();
+    const interval = setInterval(loadKdsOrders, 4000);
+    return () => clearInterval(interval);
   }, []);
 
   const toggleItemDone = (orderId, itemIdx) => {
@@ -178,33 +186,20 @@ export default function LiveOrdersKDS() {
     } else if (currentOrder.status === 'preparing') {
       nextStatus = 'ready';
     } else if (currentOrder.status === 'ready') {
-      nextStatus = 'completed';
-      showToast(`Order ${currentOrder.table} served & completed!`);
+      nextStatus = 'served';
+      showToast(`Order for ${currentOrder.table} served to table!`);
     }
 
     setOrders((prev) =>
       prev
         .map((order) => {
           if (order.id !== orderId) return order;
-          if (order.status === 'pending') {
-            return {
-              ...order,
-              status: 'preparing',
-              timeElapsed: '00:01',
-              targetTime: 'Target: 25m'
-            };
-          }
-          if (order.status === 'preparing') {
-            return {
-              ...order,
-              status: 'ready',
-              items: order.items.map((i) => ({ ...i, done: true }))
-            };
-          }
-          if (order.status === 'ready') {
-            return null; // Completed / Served
-          }
-          return order;
+          if (nextStatus === 'served' || nextStatus === 'completed') return null;
+          return {
+            ...order,
+            status: nextStatus,
+            items: nextStatus === 'ready' ? order.items.map((i) => ({ ...i, done: true })) : order.items
+          };
         })
         .filter(Boolean)
     );
@@ -212,7 +207,7 @@ export default function LiveOrdersKDS() {
     try {
       await ordersApi.updateStatus(orderId, nextStatus);
     } catch (err) {
-      console.warn('Failed to update order status in PostgreSQL backend:', err.message);
+      console.warn('Failed to update order status in backend:', err.message);
     }
   };
 

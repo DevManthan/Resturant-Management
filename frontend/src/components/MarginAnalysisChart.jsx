@@ -191,7 +191,7 @@ export default function MarginAnalysisChart({ menuItems }) {
               </div>
               {cat.outOfStock > 0 && (
                 <div className="mt-2.5 text-[11px] font-medium text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
-                  {cat.outOfStock} item(s) marked Out of Stock (86'd)
+                  {cat.outOfStock} item(s) marked Out of Stock
                 </div>
               )}
             </div>

@@ -3,10 +3,13 @@ import {
   Activity,
   LayoutGrid,
   Utensils,
+  BookOpen,
   User,
   PanelLeftClose,
   PanelLeft,
-  X
+  X,
+  Globe,
+  LogOut
 } from 'lucide-react';
 
 export default function Sidebar({
@@ -15,7 +18,8 @@ export default function Sidebar({
   isExpanded,
   setIsExpanded,
   mobileOpen,
-  setMobileOpen
+  setMobileOpen,
+  onSignOut
 }) {
   const showText = isExpanded || mobileOpen;
 
@@ -26,6 +30,13 @@ export default function Sidebar({
       shortLabel: 'Analytics',
       icon: Activity,
       tooltip: 'Executive Analytics'
+    },
+    {
+      id: 'menu',
+      label: 'Menu & Dishes',
+      shortLabel: 'Menu',
+      icon: BookOpen,
+      tooltip: 'Dishes & Menu Catalog'
     },
     {
       id: 'live-orders',
@@ -198,12 +209,27 @@ export default function Sidebar({
                       activeTab === 'profile' ? 'text-emerald-300' : 'text-emerald-600'
                     }`}
                   >
-                    Settings & DB
+                    Restaurant Settings
                   </span>
                 </div>
               </div>
             )}
           </button>
+
+          {/* Sign Out Button */}
+          {onSignOut && (
+            <button
+              type="button"
+              onClick={onSignOut}
+              title={!showText ? 'Sign Out of BI Suite' : undefined}
+              className={`w-full flex items-center rounded-xl text-rose-600 hover:bg-rose-50 transition-all text-xs font-semibold cursor-pointer ${
+                showText ? 'px-3 h-8 gap-2.5' : 'h-8 w-8 mx-auto justify-center'
+              }`}
+            >
+              <LogOut className="w-3.5 h-3.5 shrink-0 text-rose-500" />
+              {showText && <span>Sign Out</span>}
+            </button>
+          )}
         </div>
       </aside>
     </>

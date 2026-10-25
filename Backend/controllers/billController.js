@@ -1,6 +1,7 @@
-import { mockStore } from '../config/db.js';
+import { query, mockStore } from '../config/db.js';
 import { calculateAggregateBill, calculateEqualSplit, calculateItemizedSplit } from '../services/splitBilling.js';
 import { broadcastTableUpdate } from '../socket.js';
+import { tableCarts } from './orderController.js';
 
 export const getBills = async (req, res) => {
   return res.json({ success: true, count: mockStore.bill.length, data: mockStore.bill });
@@ -39,7 +40,7 @@ export const splitBill = async (req, res) => {
 };
 
 export const settleBill = async (req, res) => {
-  const { order_id, customer_id, subtotal, discount_amt, tax_amount, total_bill, payment_mode } = req.body;
+  const { order_id, table_id, customer_id, subtotal, discount_amt, tax_amount, total_bill, payment_mode } = req.body;
 
   if (!total_bill) {
     return res.status(400).json({ success: false, error: 'total_bill is required' });
@@ -62,12 +63,61 @@ export const settleBill = async (req, res) => {
 
   mockStore.bill.unshift(settledBill);
 
-  if (order_id) {
+  if (table_id) {
+    const cleanTbl = String(table_id).replace(/[^0-9a-zA-Z-]/g, '');
+    if (tableCarts[cleanTbl]) {
+      tableCarts[cleanTbl].cart = {};
+      tableCarts[cleanTbl].last_updated = Date.now();
+    }
+    mockStore.orders.forEach((o) => {
+      if (o.table_id === table_id || o.table_id?.replace('#', '') === table_id?.replace('#', '')) {
+        o.order_status = 'completed';
+      }
+    });
+    broadcastTableUpdate({ table_id, status: 'Available' });
+  } else if (order_id) {
     const order = mockStore.orders.find((o) => o.order_id === order_id);
     if (order) {
       order.order_status = 'completed';
       broadcastTableUpdate({ table_id: order.table_id, status: 'Available' });
     }
+  }
+
+  // Persist to PostgreSQL if connected
+  try {
+    if (table_id) {
+      const cleanTable = String(table_id).replace(/[^0-9a-zA-Z-]/g, '');
+      await query(
+        `UPDATE orders SET order_status = 'completed', updated_at = NOW() 
+         WHERE (table_id = $1 OR table_id = $2 OR REPLACE(table_id, '#', '') = $3) 
+           AND order_status != 'completed'`,
+        [table_id, `#${cleanTable}`, cleanTable]
+      );
+      broadcastTableUpdate({ table_id: `#${cleanTable}`, status: 'Available' });
+    } else if (order_id) {
+      await query('UPDATE orders SET order_status = $1, updated_at = NOW() WHERE order_id = $2', ['completed', order_id]);
+      const ordRes = await query('SELECT table_id FROM orders WHERE order_id = $1', [order_id]);
+      const tbl = ordRes?.rows?.[0]?.table_id;
+      if (tbl) {
+        broadcastTableUpdate({ table_id: tbl, status: 'Available' });
+      }
+    }
+
+    await query(
+      `INSERT INTO bill (order_id, customer_id, bill_time, subtotal, discount_amt, tax_amount, total_bill, payment_mode, payment_status, payment_time)
+       VALUES ($1, $2, NOW(), $3, $4, $5, $6, $7, 'Settled', NOW())`,
+      [
+        order_id || null,
+        customer_id || 1,
+        settledBill.subtotal,
+        settledBill.discount_amt,
+        settledBill.tax_amount,
+        settledBill.total_bill,
+        settledBill.payment_mode
+      ]
+    );
+  } catch (dbErr) {
+    console.warn('[Bill Settle DB Warning]:', dbErr.message);
   }
 
   return res.status(201).json({

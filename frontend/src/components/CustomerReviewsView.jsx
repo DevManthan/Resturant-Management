@@ -93,7 +93,7 @@ export default function CustomerReviewsView() {
               <div className="w-8 h-8 rounded-lg bg-brand-50 flex items-center justify-center text-brand-600">
                 <MessageSquare className="w-4 h-4" />
               </div>
-              <h2 className="text-base font-bold text-slate-900">Oracle REVIEW Persistence Feed</h2>
+              <h2 className="text-base font-bold text-slate-900">Guest Reviews & Feedback Feed</h2>
             </div>
             <p className="text-xs text-slate-500 mt-1">
               Guest testimonials gathered automatically at post-payment split settlement.

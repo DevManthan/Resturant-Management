@@ -32,7 +32,7 @@ export default function OwnerSettingsView({ ownerData, onSaveOwnerData }) {
               <div className="w-8 h-8 rounded-lg bg-brand-50 flex items-center justify-center text-brand-600">
                 <Settings className="w-4 h-4" />
               </div>
-              <h2 className="text-base font-bold text-slate-900">Oracle OWNER & Restaurant Configuration</h2>
+              <h2 className="text-base font-bold text-slate-900">Restaurant Settings & Configuration</h2>
             </div>
             <p className="text-xs text-slate-500 mt-1">
               Fiscal GST compliance, contact records, and kitchen SLA thresholds.
@@ -42,7 +42,7 @@ export default function OwnerSettingsView({ ownerData, onSaveOwnerData }) {
           {savedSuccess && (
             <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-semibold animate-in fade-in">
               <CheckCircle2 className="w-4 h-4" />
-              <span>Saved to Oracle DB</span>
+              <span>Settings Saved</span>
             </div>
           )}
         </div>
@@ -175,7 +175,7 @@ export default function OwnerSettingsView({ ownerData, onSaveOwnerData }) {
 
               <div className="p-4 bg-slate-50 rounded-xl border border-slate-200/70">
                 <div className="flex items-center justify-between">
-                  <span className="font-bold text-slate-800 text-xs">Course Synchronization Engine</span>
+                  <span className="font-bold text-slate-800 text-xs">Table Course Timing</span>
                   <span className="font-mono text-xs font-bold text-emerald-700">Dynamic FIFO</span>
                 </div>
                 <p className="mt-1 text-[11px] text-slate-500 leading-relaxed">
@@ -192,7 +192,7 @@ export default function OwnerSettingsView({ ownerData, onSaveOwnerData }) {
               className="flex items-center gap-2 px-6 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-semibold shadow-sm transition-all"
             >
               <Save className="w-4 h-4" />
-              <span>Save & Synchronize Config</span>
+              <span>Save Settings</span>
             </button>
           </div>
         </form>

@@ -48,7 +48,7 @@ export default function StockToggleTable({
   });
 
   const totalInStock = menuItems.filter((i) => i.IN_STOCK).length;
-  const total86ed = menuItems.filter((i) => !i.IN_STOCK).length;
+  const totalOutOfStock = menuItems.filter((i) => !i.IN_STOCK).length;
   const avgPrep = Math.round(menuItems.reduce((acc, i) => acc + i.PREP_TIME, 0) / (menuItems.length || 1));
 
   const handleCreateSubmit = (e) => {
@@ -97,8 +97,8 @@ export default function StockToggleTable({
         </div>
 
         <div className="bg-white rounded-card p-5 border border-slate-200/80 shadow-card">
-          <span className="text-xs font-semibold uppercase text-slate-400">86'd / Sold Out</span>
-          <div className="mt-2 text-2xl font-bold text-rose-600">{total86ed} Unavailable</div>
+          <span className="text-xs font-semibold uppercase text-slate-400">Out of Stock</span>
+          <div className="mt-2 text-2xl font-bold text-rose-600">{totalOutOfStock} Unavailable</div>
           <span className="text-xs text-rose-700 mt-1 block">Instant-hidden from ordering</span>
         </div>
 
@@ -163,7 +163,7 @@ export default function StockToggleTable({
                 <th className="py-3 px-4">Menu Price</th>
                 <th className="py-3 px-4">COGS & Margin</th>
                 <th className="py-3 px-4">Prep SLA</th>
-                <th className="py-3 px-4 text-center">86'd / Stock Status</th>
+                <th className="py-3 px-4 text-center">Stock Status</th>
                 <th className="py-3 px-4 text-right">Actions</th>
               </tr>
             </thead>
@@ -246,14 +246,14 @@ export default function StockToggleTable({
                             ? 'bg-emerald-50 text-emerald-700 border border-emerald-300 hover:bg-emerald-100'
                             : 'bg-rose-50 text-rose-700 border border-rose-300 hover:bg-rose-100'
                         }`}
-                        title="Click to toggle In-Stock or 86'd status"
+                        title="Click to toggle In-Stock or Out-of-Stock status"
                       >
                         <span
                           className={`w-2 h-2 rounded-full ${
                             item.IN_STOCK ? 'bg-emerald-500' : 'bg-rose-500'
                           }`}
                         ></span>
-                        <span>{item.IN_STOCK ? 'In Stock' : '86’d (Sold Out)'}</span>
+                        <span>{item.IN_STOCK ? 'In Stock' : 'Out of Stock'}</span>
                       </button>
                     </td>
 
@@ -289,7 +289,7 @@ export default function StockToggleTable({
         <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white rounded-card max-w-lg w-full p-6 shadow-dropdown border border-slate-200 animate-in fade-in zoom-in-95 duration-150">
             <div className="flex items-center justify-between pb-4 border-b border-slate-100">
-              <h3 className="text-base font-bold text-slate-900">Add New Dish to Oracle Catalog</h3>
+              <h3 className="text-base font-bold text-slate-900">Add New Dish to Catalog</h3>
               <button
                 onClick={() => setIsAddModalOpen(false)}
                 className="text-slate-400 hover:text-slate-600 text-lg font-bold"
@@ -413,7 +413,7 @@ export default function StockToggleTable({
                   type="submit"
                   className="px-5 py-2 bg-brand-500 hover:bg-brand-600 text-white font-semibold rounded-xl shadow-sm"
                 >
-                  Save to Oracle MENU_ITEMS
+                  Save to Catalog
                 </button>
               </div>
             </form>

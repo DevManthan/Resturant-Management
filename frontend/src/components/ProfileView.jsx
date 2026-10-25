@@ -128,7 +128,7 @@ export default function ProfileView({ ownerData, onUpdateOwner }) {
           CLOSE_TIME: d.close_time || prev.CLOSE_TIME,
           STATUS: d.status || prev.STATUS
         }));
-        showToast('Restored saved profile values from database');
+        showToast('Restored saved profile values');
       }
     } catch (err) {
       console.warn(err);
@@ -193,11 +193,11 @@ export default function ProfileView({ ownerData, onUpdateOwner }) {
           <div className="flex items-center gap-2 self-stretch sm:self-auto justify-end">
             <div className="px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200/80 text-right">
               <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">
-                System Status
+                Restaurant Status
               </span>
               <div className="flex items-center gap-1.5 mt-0.5">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                <span className="text-xs font-bold text-emerald-700">PostgreSQL Connected</span>
+                <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                <span className="text-xs font-bold text-emerald-700">{formData.STATUS || 'Open'}</span>
               </div>
             </div>
           </div>
@@ -262,12 +262,12 @@ export default function ProfileView({ ownerData, onUpdateOwner }) {
               <div>
                 <p className="font-bold text-emerald-900">Profile Updated Successfully</p>
                 <p className="text-[11px] text-emerald-700 font-normal">
-                  All changes have been synchronized to the Oracle OWNER entity.
+                  All changes have been saved to restaurant configuration.
                 </p>
               </div>
             </div>
             <span className="text-[10px] px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 font-bold">
-              Synced
+              Saved
             </span>
           </div>
         )}
@@ -513,7 +513,7 @@ export default function ProfileView({ ownerData, onUpdateOwner }) {
                   <span className="px-2 py-0.5 bg-emerald-100 text-emerald-900 rounded-md font-mono font-bold text-xs">Synchronous Dispatch</span>
                 </div>
                 <p className="text-[11px] text-slate-600 mt-1.5 leading-relaxed">
-                  Dishes in the same ticket prioritize longest preparation times first (PREP_TIME) so all items on a table finish synchronously.
+                  Dishes in the same ticket prioritize longest preparation times first so all items on a table finish synchronously.
                 </p>
               </div>
             </div>
@@ -528,8 +528,8 @@ export default function ProfileView({ ownerData, onUpdateOwner }) {
                 <KeyRound className="w-4 h-4" />
               </div>
               <div>
-                <h2 className="text-sm font-bold text-slate-900">Security & Oracle Credentials</h2>
-                <p className="text-[11px] text-slate-400">Password hashing and access control compliance.</p>
+                <h2 className="text-sm font-bold text-slate-900">Security & Access Credentials</h2>
+                <p className="text-[11px] text-slate-400">Password protection and manager access control.</p>
               </div>
             </div>
 
@@ -537,10 +537,10 @@ export default function ProfileView({ ownerData, onUpdateOwner }) {
               <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/80">
                 <div className="flex items-center gap-2">
                   <ShieldCheck className="w-4 h-4 text-emerald-600" />
-                  <span className="font-bold text-slate-800">PASSWORDHASH Integrity</span>
+                  <span className="font-bold text-slate-800">Password Encryption</span>
                 </div>
                 <p className="text-[11px] text-slate-500 mt-1">
-                  Owner credentials stored as salted bcrypt hashes matching the Oracle schema specification.
+                  Manager credentials stored with salted bcrypt encryption and role-based access verification.
                 </p>
                 <div className="mt-3 flex items-center justify-between">
                   <div className="flex items-center gap-2">

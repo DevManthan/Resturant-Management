@@ -44,7 +44,7 @@ export default function Header({
     dashboard: 'Executive BI Dashboard',
     heatmaps: 'Hourly Revenue Heatmap & Peak Traffic',
     margins: 'Category Profit Margin & Contribution Matrix',
-    inventory: 'Live Menu Stock & 86 Item Toggles',
+    inventory: 'Live Menu Stock & Item Availability',
     reports: 'End-of-Day (EOD) Automated Reports',
     floorplan: 'Real-Time Floorplan & Dining Occupancy',
     reviews: 'Guest Satisfaction & Service Quality Ratings',

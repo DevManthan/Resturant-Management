@@ -29,8 +29,9 @@ export default function TableQrModal({ table, isOpen, onClose }) {
   };
 
   const tableNum = getTableNumericId(table.id || table.name);
-  const origin = window.location.origin;
-  const tableUrl = `${origin}/?table=${tableNum}`;
+  const lanIp = '192.168.29.69';
+  const isLocalhost = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+  const tableUrl = isLocalhost ? `http://${lanIp}:3000/?table=${tableNum}` : `${window.location.origin}/?table=${tableNum}`;
   const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&color=25-45-35&bgcolor=240-244-248&data=${encodeURIComponent(
     tableUrl
   )}`;
@@ -45,22 +46,19 @@ export default function TableQrModal({ table, isOpen, onClose }) {
     window.open(tableUrl, '_blank');
   };
 
-  const handleSimulateTwoGuests = () => {
-    // Open two side-by-side windows to demonstrate real-time shared ordering!
-    const width = 420;
-    const height = 750;
-    window.open(
-      tableUrl,
-      '_blank',
-      `width=${width},height=${height},left=100,top=100`
-    );
-    setTimeout(() => {
-      window.open(
-        tableUrl,
-        '_blank',
-        `width=${width},height=${height},left=550,top=100`
-      );
-    }, 400);
+  const handleSimulateGuests = (count = 2) => {
+    // Open side-by-side guest windows to test real-time shared ordering!
+    const width = 400;
+    const height = 740;
+    for (let i = 0; i < count; i++) {
+      setTimeout(() => {
+        window.open(
+          tableUrl,
+          '_blank',
+          `width=${width},height=${height},left=${50 + (i * 420)},top=80`
+        );
+      }, i * 300);
+    }
   };
 
   return (
@@ -161,14 +159,37 @@ export default function TableQrModal({ table, isOpen, onClose }) {
               <span>Open Customer Menu (Table #{tableNum})</span>
             </button>
 
-            <button
-              onClick={handleSimulateTwoGuests}
-              className="w-full bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold py-2.5 rounded-xl text-xs flex items-center justify-center gap-2 transition-colors cursor-pointer"
-              title="Opens two windows side-by-side to test real-time order sharing between 2 guests"
-            >
-              <Users className="w-4 h-4 text-[#475B4B]" />
-              <span>Simulate 2 Guests (Test Shared Order Sync)</span>
-            </button>
+            <div className="pt-1 space-y-1.5">
+              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">
+                Simulate Multi-Guest Shared Table (Live Sync):
+              </span>
+              <div className="grid grid-cols-3 gap-2">
+                <button
+                  onClick={() => handleSimulateGuests(2)}
+                  className="bg-slate-100 hover:bg-[#475B4B] hover:text-white text-slate-800 font-bold py-2 rounded-xl text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-2xs"
+                  title="Open 2 side-by-side windows"
+                >
+                  <Users className="w-3.5 h-3.5" />
+                  <span>2 Guests</span>
+                </button>
+                <button
+                  onClick={() => handleSimulateGuests(3)}
+                  className="bg-slate-100 hover:bg-[#475B4B] hover:text-white text-slate-800 font-bold py-2 rounded-xl text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-2xs"
+                  title="Open 3 side-by-side windows"
+                >
+                  <Users className="w-3.5 h-3.5" />
+                  <span>3 Guests</span>
+                </button>
+                <button
+                  onClick={() => handleSimulateGuests(4)}
+                  className="bg-slate-100 hover:bg-[#475B4B] hover:text-white text-slate-800 font-bold py-2 rounded-xl text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-2xs"
+                  title="Open 4 side-by-side windows"
+                >
+                  <Users className="w-3.5 h-3.5" />
+                  <span>4 Guests</span>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </div>

@@ -101,10 +101,10 @@ export default function DailyReportsView({
                 <div className="w-8 h-8 rounded-lg bg-brand-50 flex items-center justify-center text-brand-600">
                   <FileSpreadsheet className="w-4 h-4" />
                 </div>
-                <h2 className="text-base font-bold text-slate-900">Oracle DAILY_REPORTS Ledger</h2>
+                <h2 className="text-base font-bold text-slate-900">Daily Financial Ledger</h2>
               </div>
               <p className="text-xs text-slate-500 mt-1">
-                Analytical snapshots generated from ORDERS, BILL, and REVIEW tables.
+                Analytical snapshots generated from daily dining revenue, bills, and guest summaries.
               </p>
             </div>
 

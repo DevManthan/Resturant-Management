@@ -17,50 +17,95 @@ import {
 import { bookingApi } from '../services/api';
 import TableQrModal from './TableQrModal';
 
+const DEFAULT_TABLES = [
+  { id: 'T-01', name: 'T-01', seats: 2, status: 'Available', party: '', time: '' },
+  { id: 'T-02', name: 'T-02', seats: 4, status: 'Available', party: '', time: '' },
+  { id: 'Booth-01', name: 'Booth-01', seats: 6, status: 'Available', party: '', time: '' },
+  { id: 'T-04', name: 'T-04', seats: 2, status: 'Maintenance', party: '', time: '' },
+  { id: 'T-05', name: 'T-05', seats: 4, status: 'Available', party: '', time: '' },
+  { id: 'Booth-02', name: 'Booth-02', seats: 8, status: 'Available', party: '', time: '' }
+];
+
 export default function TableManager() {
   const [qrModalTable, setQrModalTable] = useState(null);
-  const [tables, setTables] = useState([
-    {
-      id: 'T-01',
-      name: 'T-01',
-      seats: 2,
-      status: 'Available',
-      party: '',
-      time: ''
-    },
-    {
-      id: 'T-02',
-      name: 'T-02',
-      seats: 4,
-      status: 'Occupied',
-      party: 'Smith Party',
-      time: '(45m)'
-    },
-    {
-      id: 'Booth-01',
-      name: 'Booth-01',
-      seats: 6,
-      status: 'Reserved',
-      party: 'Mehta Party',
-      time: '7:30 PM'
-    },
-    {
-      id: 'T-04',
-      name: 'T-04',
-      seats: 2,
-      status: 'Maintenance',
-      party: '',
-      time: ''
-    },
-    {
-      id: 'T-05',
-      name: 'T-05',
-      seats: 4,
-      status: 'Available',
-      party: '',
-      time: ''
+  const [tables, setTables] = useState(() => {
+    try {
+      const saved = localStorage.getItem('luxedine_restaurant_tables');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {}
+    return DEFAULT_TABLES;
+  });
+
+  // Add Table Modal state
+  const [isAddTableModalOpen, setIsAddTableModalOpen] = useState(false);
+  const [newTableName, setNewTableName] = useState('');
+  const [newTableSeats, setNewTableSeats] = useState(4);
+  const [newTableSection, setNewTableSection] = useState('Main Dining');
+
+  const saveTablesState = (newTables) => {
+    setTables(newTables);
+    try {
+      localStorage.setItem('luxedine_restaurant_tables', JSON.stringify(newTables));
+      const channel = new BroadcastChannel('luxedine_tables_sync');
+      channel.postMessage({ type: 'TABLES_STRUCTURE_CHANGED', tables: newTables });
+      setTimeout(() => channel.close(), 1000);
+    } catch (e) {}
+  };
+
+  const handleOpenAddTableModal = () => {
+    const numbers = tables
+      .map((t) => {
+        const m = t.name.match(/\d+/);
+        return m ? parseInt(m[0], 10) : 0;
+      })
+      .filter((n) => !isNaN(n));
+    const nextNum = (Math.max(0, ...numbers) + 1).toString().padStart(2, '0');
+    setNewTableName(`T-${nextNum}`);
+    setNewTableSeats(4);
+    setNewTableSection('Main Dining');
+    setIsAddTableModalOpen(true);
+  };
+
+  const handleCreateNewTable = (e) => {
+    if (e) e.preventDefault();
+    const cleanName = (newTableName || '').trim();
+    if (!cleanName) return;
+
+    if (tables.some((t) => t.name.toLowerCase() === cleanName.toLowerCase())) {
+      setSuccessMsg(`Table "${cleanName}" already exists!`);
+      setTimeout(() => setSuccessMsg(null), 3000);
+      return;
     }
-  ]);
+
+    const newTableObj = {
+      id: cleanName,
+      name: cleanName,
+      seats: parseInt(newTableSeats, 10) || 4,
+      status: 'Available',
+      party: '',
+      time: '',
+      section: newTableSection
+    };
+
+    const updated = [...tables, newTableObj];
+    saveTablesState(updated);
+    setSelectedTable(cleanName);
+    setIsAddTableModalOpen(false);
+    setSuccessMsg(`Table "${cleanName}" (${newTableSeats} seats) added to floorplan!`);
+    setTimeout(() => setSuccessMsg(null), 3500);
+  };
+
+  const handleDeleteTable = (tableName) => {
+    if (tables.length <= 1) return;
+    const updated = tables.filter((t) => t.name !== tableName);
+    saveTablesState(updated);
+    setSelectedTable(updated[0]?.name || '');
+    setSuccessMsg(`Table "${tableName}" removed from floorplan.`);
+    setTimeout(() => setSuccessMsg(null), 3000);
+  };
 
   // Quick Reserve form state
   const [selectedTable, setSelectedTable] = useState('Booth-01');
@@ -79,15 +124,54 @@ export default function TableManager() {
   const [slotDateInput, setSlotDateInput] = useState(new Date().toISOString().split('T')[0]);
   const [slotTimeInput, setSlotTimeInput] = useState('19:00');
 
+  // Keep track of latest bookings to update PostgreSQL status directly
+  const latestBookingsRef = React.useRef([]);
+
   // Direct table status updater (e.g. Reserved -> Occupied, Occupied -> Available)
   const handleSetTableStatus = (tableName, newStatus) => {
-    setTables((prev) =>
-      prev.map((t) => {
+    // 1. Find active non-completed booking for this table
+    const activeBooking = latestBookingsRef.current.find(
+      (b) => b.table_id === tableName && ['Confirmed', 'Reserved', 'Seated'].includes(b.status)
+    );
+
+    if (newStatus === 'Occupied') {
+      if (activeBooking && (activeBooking.status === 'Confirmed' || activeBooking.status === 'Reserved')) {
+        // Seating an existing confirmed reservation
+        bookingApi.updateStatus(activeBooking.booking_id, 'Seated').catch(() => {});
+      } else if (!activeBooking) {
+        // Seating walk-in guests with no prior reservation
+        const targetTable = tables.find((t) => t.name === tableName);
+        bookingApi.create({
+          table_id: tableName,
+          customer_name: 'Walk-in Guests',
+          booking_date: new Date().toISOString().split('T')[0],
+          booking_time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          guest_count: targetTable?.seats || 2,
+          status: 'Seated'
+        }).catch(() => {});
+      }
+    } else if (newStatus === 'Available') {
+      // Freeing table: complete active booking
+      if (activeBooking && activeBooking.booking_id) {
+        bookingApi.updateStatus(activeBooking.booking_id, 'Completed').catch(() => {});
+      }
+    } else if (newStatus === 'Maintenance') {
+      if (activeBooking && activeBooking.booking_id) {
+        bookingApi.updateStatus(activeBooking.booking_id, 'Cancelled').catch(() => {});
+      }
+    }
+
+    setTables((prev) => {
+      const updated = prev.map((t) => {
         if (t.name === tableName) {
-          let updatedParty = t.party;
-          let updatedTime = t.time;
+          let updatedParty = '';
+          let updatedTime = '';
           if (newStatus === 'Occupied') {
-            updatedParty = t.party || 'Dine-In Guests';
+            if (t.status === 'Reserved' && t.party) {
+              updatedParty = t.party;
+            } else {
+              updatedParty = `Walk-in Guests (${t.seats}p)`;
+            }
             updatedTime = 'Seated just now';
           } else if (newStatus === 'Available') {
             updatedParty = '';
@@ -107,53 +191,158 @@ export default function TableManager() {
           };
         }
         return t;
-      })
-    );
+      });
+      try {
+        localStorage.setItem('luxedine_restaurant_tables', JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
+
+    // Broadcast table status change across tabs and landing page
+    try {
+      const channel = new BroadcastChannel('luxedine_tables_sync');
+      channel.postMessage({
+        type: 'TABLE_STATUS_CHANGED',
+        table_id: tableName,
+        status: newStatus
+      });
+      setTimeout(() => channel.close(), 1000);
+      localStorage.setItem('luxedine_tables_updated', Date.now().toString());
+    } catch (e) {}
+
     setSuccessMsg(`Table ${tableName} is now marked as "${newStatus}"!`);
     setTimeout(() => setSuccessMsg(null), 3500);
   };
 
-  // Sync initial bookings from PostgreSQL
+  // Sync bookings from PostgreSQL and real-time events
   useEffect(() => {
     const loadBookings = async () => {
       try {
         const res = await bookingApi.getAll();
         if (res && res.data && res.data.length > 0) {
-          // Map bookings to table statuses
+          latestBookingsRef.current = res.data;
+
+          // Filter ONLY active reservations (Confirmed, Reserved, Seated). Completed/Cancelled are past history.
+          const activeBookings = res.data.filter((b) =>
+            ['Confirmed', 'Reserved', 'Seated'].includes(b.status)
+          );
+
           const bookedMap = {};
-          res.data.forEach((b) => {
-            if (b.table_id) {
-              bookedMap[b.table_id] = {
-                status: b.status || 'Reserved',
-                party: b.special_preferences || `Party of ${b.guest_count}`,
-                time: b.booking_time || '7:00 PM'
-              };
+          activeBookings.forEach((b) => {
+            if (b.table_id && !bookedMap[b.table_id]) {
+              if (b.status === 'Seated') {
+                bookedMap[b.table_id] = {
+                  status: 'Occupied',
+                  party: b.customer_name ? `${b.customer_name} (${b.guest_count || 2}p)` : (b.special_preferences || `Party of ${b.guest_count}`),
+                  time: b.booking_time ? `${b.booking_time}` : '7:00 PM',
+                  bookingId: b.booking_id
+                };
+              } else {
+                bookedMap[b.table_id] = {
+                  status: 'Reserved',
+                  party: b.customer_name ? `${b.customer_name} (${b.guest_count || 2}p)` : (b.special_preferences || `Party of ${b.guest_count}`),
+                  time: b.booking_time ? `${b.booking_time}` : '7:00 PM',
+                  bookingId: b.booking_id
+                };
+              }
             }
           });
-          setTables((prev) =>
-            prev.map((t) => {
+
+          setTables((prev) => {
+            const nextTables = prev.map((t) => {
               if (bookedMap[t.name]) {
+                if (t.status === 'Maintenance' && bookedMap[t.name].status === 'Available') {
+                  return t;
+                }
                 return {
                   ...t,
                   status: bookedMap[t.name].status,
                   party: bookedMap[t.name].party,
                   time: bookedMap[t.name].time
                 };
+              } else {
+                // Table has NO active booking in PostgreSQL
+                if (t.status === 'Maintenance') return t;
+                // If it was previously marked Reserved or Occupied from an old completed booking, clear it!
+                if (t.status === 'Reserved') {
+                  return { ...t, status: 'Available', party: '', time: '' };
+                }
+                if (t.status === 'Available') {
+                  return { ...t, party: '', time: '' };
+                }
+                return t;
               }
-              return t;
-            })
-          );
+            });
+            try {
+              localStorage.setItem('luxedine_restaurant_tables', JSON.stringify(nextTables));
+            } catch (e) {}
+            return nextTables;
+          });
         }
       } catch (err) {
         console.warn('Could not load bookings from PostgreSQL:', err.message);
       }
     };
+
     loadBookings();
+    const interval = setInterval(loadBookings, 3000);
+
+    let channel = null;
+    try {
+      channel = new BroadcastChannel('luxedine_tables_sync');
+      channel.onmessage = (e) => {
+        if (e.data && e.data.type === 'TABLE_RESERVED' && e.data.table_id) {
+          setTables((prev) =>
+            prev.map((t) => {
+              if (t.name === e.data.table_id) {
+                return {
+                  ...t,
+                  status: 'Reserved',
+                  party: e.data.party || 'Reserved Party',
+                  time: e.data.time || 'Upcoming'
+                };
+              }
+              return t;
+            })
+          );
+        } else if (e.data && e.data.type === 'TABLE_STATUS_CHANGED' && e.data.table_id) {
+          setTables((prev) =>
+            prev.map((t) => {
+              if (t.name === e.data.table_id) {
+                return {
+                  ...t,
+                  status: e.data.status,
+                  party: e.data.status === 'Available' ? '' : t.party,
+                  time: e.data.status === 'Available' ? '' : t.time
+                };
+              }
+              return t;
+            })
+          );
+        }
+        loadBookings();
+      };
+    } catch (e) {}
+
+    const handleStorage = (e) => {
+      if (e.key === 'luxedine_tables_updated') {
+        loadBookings();
+      }
+    };
+    window.addEventListener('storage', handleStorage);
+
+    return () => {
+      clearInterval(interval);
+      if (channel) channel.close();
+      window.removeEventListener('storage', handleStorage);
+    };
   }, []);
 
   const handleBlockTable = async (e) => {
     e.preventDefault();
     if (!selectedTable) return;
+
+    const formattedParty = partyName ? `${partyName} (${partySize}p)` : 'Reserved Party';
 
     setTables((prev) =>
       prev.map((t) => {
@@ -161,7 +350,7 @@ export default function TableManager() {
           return {
             ...t,
             status: 'Reserved',
-            party: partyName ? `${partyName} Party` : 'Reserved Party',
+            party: formattedParty,
             time: reserveTime ? reserveTime : '7:30 PM'
           };
         }
@@ -169,12 +358,13 @@ export default function TableManager() {
       })
     );
 
-    setSuccessMsg(`Table ${selectedTable} reserved & saved in PostgreSQL!`);
+    setSuccessMsg(`Table ${selectedTable} reserved for ${partyName || 'Guest'}!`);
     setTimeout(() => setSuccessMsg(null), 3500);
 
     try {
       await bookingApi.create({
-        customer_id: 1,
+        customer_name: partyName || 'Reserved Guest',
+        phone_no: '+91 98000 12345',
         table_id: selectedTable,
         booking_date: new Date().toISOString().split('T')[0],
         booking_time: reserveTime || '19:30',
@@ -184,6 +374,19 @@ export default function TableManager() {
     } catch (err) {
       console.warn('Booking create fallback:', err.message);
     }
+
+    try {
+      const channel = new BroadcastChannel('luxedine_tables_sync');
+      channel.postMessage({
+        type: 'TABLE_RESERVED',
+        table_id: selectedTable,
+        status: 'Reserved',
+        time: reserveTime || '19:30',
+        party: formattedParty
+      });
+      setTimeout(() => channel.close(), 1000);
+      localStorage.setItem('luxedine_tables_updated', Date.now().toString());
+    } catch (e) {}
   };
 
   const handleClearForm = () => {
@@ -394,6 +597,26 @@ export default function TableManager() {
                 </div>
               );
             })}
+
+            {/* + Add Table Rectangle Block matching table card size */}
+            <button
+              type="button"
+              onClick={handleOpenAddTableModal}
+              className="group rounded-2xl p-4 border-2 border-dashed border-slate-300 hover:border-black bg-slate-50/70 hover:bg-white transition-all cursor-pointer shadow-xs hover:shadow-md flex flex-col items-center justify-center min-h-[160px] text-center gap-2.5 active:scale-[0.98]"
+              title="Add a new dining table or booth to the floorplan"
+            >
+              <div className="w-11 h-11 rounded-full bg-white group-hover:bg-black group-hover:text-white text-slate-700 border border-slate-200 group-hover:border-black flex items-center justify-center transition-all shadow-xs">
+                <Plus className="w-5 h-5 transition-transform group-hover:scale-110" />
+              </div>
+              <div>
+                <span className="font-extrabold text-xs text-slate-800 group-hover:text-black block leading-tight">
+                  Add Table
+                </span>
+                <span className="text-[10px] text-slate-400 font-medium block mt-0.5">
+                  Expand floorplan
+                </span>
+              </div>
+            </button>
           </div>
         </div>
 
@@ -746,6 +969,113 @@ export default function TableManager() {
                 Apply Schedule Slot
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add New Table Modal */}
+      {isAddTableModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl p-6 sm:p-7 max-w-md w-full shadow-2xl border border-slate-100 space-y-5 animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between pb-3.5 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-2xl bg-black text-white flex items-center justify-center shadow-xs">
+                  <Plus className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold text-slate-900 leading-tight">
+                    Add New Dining Table
+                  </h3>
+                  <p className="text-xs text-slate-400 font-medium mt-0.5">
+                    Expand your luxury floorplan layout
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsAddTableModalOpen(false)}
+                className="p-1.5 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateNewTable} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                  Table Name / Label
+                </label>
+                <input
+                  type="text"
+                  value={newTableName}
+                  onChange={(e) => setNewTableName(e.target.value)}
+                  placeholder="e.g. T-07, Booth-03, Rooftop-01"
+                  required
+                  className="w-full h-11 px-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold text-slate-900 focus:bg-white focus:border-black focus:ring-1 focus:ring-black outline-none transition-all"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                  Seating Capacity (Guests)
+                </label>
+                <div className="flex items-center gap-2">
+                  {[2, 4, 6, 8, 10].map((seats) => (
+                    <button
+                      key={seats}
+                      type="button"
+                      onClick={() => setNewTableSeats(seats)}
+                      className={`flex-1 h-10 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                        newTableSeats === seats
+                          ? 'bg-black text-white border-black shadow-xs'
+                          : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                      }`}
+                    >
+                      {seats}p
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                  Dining Section
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  {['Main Dining', 'Private Booth', 'Terrace / Balcony', 'VIP Lounge'].map((sec) => (
+                    <button
+                      key={sec}
+                      type="button"
+                      onClick={() => setNewTableSection(sec)}
+                      className={`h-9 px-3 rounded-xl text-xs font-semibold border transition-all cursor-pointer text-left ${
+                        newTableSection === sec
+                          ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
+                          : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                      }`}
+                    >
+                      {sec}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="pt-2 flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setIsAddTableModalOpen(false)}
+                  className="flex-1 h-11 rounded-xl text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 h-11 rounded-xl text-xs font-bold text-white bg-black hover:bg-slate-800 transition-all shadow-md active:scale-95 cursor-pointer flex items-center justify-center gap-1.5"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Add Table</span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

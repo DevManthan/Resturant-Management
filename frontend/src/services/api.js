@@ -1,4 +1,11 @@
-const API_BASE = 'http://localhost:5000/api';
+const getApiBase = () => {
+  if (typeof window !== 'undefined' && window.location && window.location.hostname && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+    return `http://${window.location.hostname}:5000/api`;
+  }
+  return 'http://localhost:5000/api';
+};
+
+const API_BASE = getApiBase();
 
 async function request(endpoint, options = {}) {
   const url = `${API_BASE}${endpoint}`;
@@ -58,7 +65,8 @@ export const ownerApi = {
 // 3. Orders & Kitchen Display System (KDS) API
 export const ordersApi = {
   getAll: (params = {}) => {
-    const query = new URLSearchParams(params).toString();
+    const normalized = typeof params === 'string' ? { table_id: params } : params;
+    const query = new URLSearchParams(normalized).toString();
     return request(`/orders${query ? `?${query}` : ''}`);
   },
   getKds: () => request('/orders/kds'),
@@ -69,7 +77,22 @@ export const ordersApi = {
   updateStatus: (id, status) => request(`/orders/${id}/status`, {
     method: 'PATCH',
     body: JSON.stringify({ status })
-  })
+  }),
+  callWaiter: (data) => request('/orders/call-waiter', {
+    method: 'POST',
+    body: JSON.stringify(data)
+  }),
+  getCart: (tableId) => {
+    const clean = String(tableId).replace(/[^0-9a-zA-Z-]/g, '');
+    return request(`/orders/cart/${clean}`);
+  },
+  updateCart: (tableId, payload) => {
+    const clean = String(tableId).replace(/[^0-9a-zA-Z-]/g, '');
+    return request(`/orders/cart/${clean}`, {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+  }
 };
 
 // 4. Bookings & Table Floorplan API
@@ -107,10 +130,23 @@ export const billsApi = {
 
 // 6. Reports & Executive Analytics API
 export const reportsApi = {
-  getAnalytics: () => request('/reports/analytics'),
+  getAnalytics: (params = {}) => {
+    const query = new URLSearchParams(params).toString();
+    return request(`/reports/analytics${query ? `?${query}` : ''}`);
+  },
   getDaily: () => request('/reports/daily'),
   triggerEod: (date) => request('/reports/eod', {
     method: 'POST',
     body: JSON.stringify({ date })
   })
 };
+
+// 7. Customer Reviews & Guest Feedback API
+export const reviewsApi = {
+  getAll: () => request('/reviews'),
+  create: (reviewData) => request('/reviews', {
+    method: 'POST',
+    body: JSON.stringify(reviewData)
+  })
+};
+

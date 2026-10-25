@@ -86,9 +86,10 @@ app.use((err, req, res, next) => {
 // Initialize database & Start HTTP + WebSocket Server
 const startServer = async () => {
   await initDb();
-  server.listen(PORT, () => {
+  server.listen(PORT, '0.0.0.0', () => {
     console.log(`\n======================================================`);
     console.log(`🚀 Luxe Dine Backend API running on http://localhost:${PORT}`);
+    console.log(`📱 Network API available on http://192.168.29.69:${PORT}`);
     console.log(`📡 WebSocket server initialized for real-time KDS ticketing`);
     console.log(`🗄️ Database: PostgreSQL (with resilient mock fallback)`);
     console.log(`======================================================\n`);
