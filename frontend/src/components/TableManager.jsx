@@ -11,11 +11,14 @@ import {
   ChevronDown,
   Sparkles,
   UserCheck,
-  Utensils
+  Utensils,
+  QrCode
 } from 'lucide-react';
 import { bookingApi } from '../services/api';
+import TableQrModal from './TableQrModal';
 
 export default function TableManager() {
+  const [qrModalTable, setQrModalTable] = useState(null);
   const [tables, setTables] = useState([
     {
       id: 'T-01',
@@ -285,9 +288,22 @@ export default function TableManager() {
                   <div>
                     <div className="flex items-center justify-between">
                       <span className="font-extrabold text-slate-900 text-sm leading-none">{table.name}</span>
-                      <div className="flex items-center gap-1 text-slate-500 text-xs font-semibold leading-none">
-                        <User className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                        <span>{table.seats}</span>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setQrModalTable(table);
+                          }}
+                          title={`View & Print QR Code for ${table.name}`}
+                          className="p-1 rounded-md text-slate-400 hover:text-black hover:bg-slate-100 transition-colors"
+                        >
+                          <QrCode className="w-3.5 h-3.5" />
+                        </button>
+                        <div className="flex items-center gap-1 text-slate-500 text-xs font-semibold leading-none">
+                          <User className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                          <span>{table.seats}</span>
+                        </div>
                       </div>
                     </div>
 
@@ -733,6 +749,13 @@ export default function TableManager() {
           </div>
         </div>
       )}
+
+      {/* Unique Table QR Modal */}
+      <TableQrModal
+        table={qrModalTable}
+        isOpen={Boolean(qrModalTable)}
+        onClose={() => setQrModalTable(null)}
+      />
     </div>
   );
 }

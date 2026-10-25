@@ -1,18 +1,36 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Sidebar from './components/Sidebar';
 import ExecutiveAnalytics from './components/ExecutiveAnalytics';
 import LiveOrdersKDS from './components/LiveOrdersKDS';
 import TableManager from './components/TableManager';
 import ProfileView from './components/ProfileView';
+import CustomerMenuOrdering from './components/CustomerMenuOrdering';
+import TableQrModal from './components/TableQrModal';
 import { initialOwnerData } from './data/mockData';
-import { Menu, Activity, Utensils, LayoutGrid, User } from 'lucide-react';
+import { Menu, Activity, Utensils, LayoutGrid, User, QrCode } from 'lucide-react';
 
 export default function App() {
-  // activeTab: 'analytics' | 'live-orders' | 'tables' | 'profile'
+  // Check if user scanned a table QR code (?table=102, ?table=101, etc.)
+  const [tableParam, setTableParam] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('table');
+  });
+
+  // activeTab for manager dashboard: 'analytics' | 'live-orders' | 'tables' | 'profile'
   const [activeTab, setActiveTab] = useState('analytics');
   const [isExpanded, setIsExpanded] = useState(true);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [ownerData, setOwnerData] = useState(initialOwnerData);
+  const [testQrModalOpen, setTestQrModalOpen] = useState(false);
+
+  useEffect(() => {
+    const handlePopState = () => {
+      const params = new URLSearchParams(window.location.search);
+      setTableParam(params.get('table'));
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
 
   const getPageTitle = () => {
     switch (activeTab) {
@@ -28,6 +46,21 @@ export default function App() {
         return 'Bistro BI';
     }
   };
+
+  // If customer scanned table QR code: Show ONLY the Customer Menu for that specific table!
+  if (tableParam) {
+    return (
+      <CustomerMenuOrdering
+        tableId={tableParam}
+        onExit={() => {
+          const url = new URL(window.location);
+          url.searchParams.delete('table');
+          window.history.pushState({}, '', url);
+          setTableParam(null);
+        }}
+      />
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#EEF1F5] flex flex-col md:flex-row font-sans antialiased text-slate-800">
@@ -54,11 +87,15 @@ export default function App() {
           </div>
         </div>
 
-        {/* Small live status pill */}
-        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-[10px] font-bold shrink-0 leading-none">
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-          <span>Live</span>
-        </div>
+        {/* Manager Table QR Codes Button */}
+        <button
+          onClick={() => setTestQrModalOpen(true)}
+          className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold shrink-0 transition-colors cursor-pointer"
+          title="View & Print Table QR Codes"
+        >
+          <QrCode className="w-3.5 h-3.5 text-slate-600" />
+          <span>Table QRs</span>
+        </button>
       </header>
 
       {/* Sidebar with Desktop Icon/Expanded mode and Mobile Drawer */}
@@ -139,6 +176,13 @@ export default function App() {
           <span className="text-[10px] leading-none">Profile</span>
         </button>
       </nav>
+
+      {/* Quick Table QR Test Modal for Manager */}
+      <TableQrModal
+        table={{ id: '102', name: 'Table #102', seats: 4 }}
+        isOpen={testQrModalOpen}
+        onClose={() => setTestQrModalOpen(false)}
+      />
     </div>
   );
 }
