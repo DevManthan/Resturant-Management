@@ -124,7 +124,7 @@ export default function TableManager() {
           res.data.forEach((b) => {
             if (b.table_id) {
               bookedMap[b.table_id] = {
-                status: b.satus || 'Reserved',
+                status: b.status || 'Reserved',
                 party: b.special_preferences || `Party of ${b.guest_count}`,
                 time: b.booking_time || '7:00 PM'
               };

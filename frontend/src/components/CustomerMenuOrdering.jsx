@@ -17,6 +17,7 @@ import {
   Share2,
   Sparkles
 } from 'lucide-react';
+import { ordersApi, billsApi } from '../services/api';
 
 // Custom Plate / Cloche Icon for "Ready for Service"
 function ClocheIcon({ className = 'w-5 h-5' }) {
@@ -168,6 +169,20 @@ export default function CustomerMenuOrdering({ tableId = '102', onExit, onBackTo
     }
   });
 
+  // Placed orders list for Invoice Summary
+  const [placedOrders, setPlacedOrders] = useState(() => {
+    try {
+      const saved = localStorage.getItem(ordersKey);
+      if (saved) return JSON.parse(saved);
+    } catch (e) {}
+    return [
+      { id: 5, title: 'Truffle Risotto', qty: 1, price: 750 },
+      { id: 1, title: 'Seared Scallops', qty: 2, price: 450 },
+      { id: 6, title: 'Artisan Sourdough', qty: 1, price: 250 },
+      { id: 7, title: 'Sparkling Water', qty: 1, price: 180 }
+    ];
+  });
+
   // Table partner notifications
   const [partnerNotice, setPartnerNotice] = useState(null);
   const [connectedGuests, setConnectedGuests] = useState(1);
@@ -316,20 +331,88 @@ export default function CustomerMenuOrdering({ tableId = '102', onExit, onBackTo
     return { totalItems: itemsCount, totalPrice: priceSum };
   }, [cart]);
 
-  // Send to kitchen action
-  const handleSendToKitchen = () => {
+  // Invoice calculations in INR
+  const invoiceSubtotal = useMemo(() => {
+    return placedOrders.reduce((acc, itm) => acc + (itm.price * itm.qty), 0);
+  }, [placedOrders]);
+  const invoiceTax = Math.round(invoiceSubtotal * 0.05 * 100) / 100;
+  const invoiceTotal = invoiceSubtotal + invoiceTax;
+  const splitTotalPerGuest = Math.round((invoiceTotal / 2) * 100) / 100;
+
+  // Send to kitchen action (syncs to PostgreSQL orders queue and KDS)
+  const handleSendToKitchen = async () => {
+    const currentCart = { ...cart };
+    const itemsList = Object.entries(currentCart)
+      .filter(([_, qty]) => qty > 0)
+      .map(([idStr, qty]) => {
+        const id = parseInt(idStr, 10);
+        const dish = MENU_ITEMS.find((d) => d.id === id);
+        return {
+          id,
+          title: dish?.title || 'Special Dish',
+          item_id: id,
+          item_name: dish?.title || 'Special Dish',
+          quantity: qty,
+          qty,
+          price: dish?.price || 0,
+          unit_price: dish?.price || 0
+        };
+      });
+
+    if (itemsList.length > 0) {
+      setPlacedOrders((prev) => {
+        const merged = [...itemsList, ...prev];
+        try {
+          localStorage.setItem(ordersKey, JSON.stringify(merged));
+        } catch (e) {}
+        return merged;
+      });
+    }
+
     setCart({});
     try {
       localStorage.setItem(cartKey, JSON.stringify({}));
     } catch (e) {}
     setOrderSentModal(true);
-    broadcast('ORDER_PLACED', { tableNum });
+    broadcast('ORDER_PLACED', { tableNum, items: itemsList });
+
+    // Send order to PostgreSQL & Live Kitchen KDS
+    if (itemsList.length > 0) {
+      try {
+        await ordersApi.create({
+          table_id: `#${tableNum}`,
+          customer_id: 1,
+          items: itemsList.map((i) => ({
+            item_id: i.item_id,
+            quantity: i.quantity,
+            unit_price: i.unit_price,
+            note: ''
+          })),
+          special_note: `Mobile QR Order from Table #${tableNum}`
+        });
+      } catch (err) {
+        console.warn('Could not post order to backend:', err.message);
+      }
+    }
   };
 
   // Pay Now action
-  const handlePayNow = () => {
+  const handlePayNow = async () => {
     setPaymentSuccessModal(true);
     broadcast('PAYMENT_DONE', { tableNum });
+    try {
+      await billsApi.settle({
+        order_id: null,
+        customer_id: 1,
+        subtotal: invoiceSubtotal,
+        discount_amt: 0,
+        tax_amount: invoiceTax,
+        total_bill: splitBill ? splitTotalPerGuest : invoiceTotal,
+        payment_mode: 'UPI'
+      });
+    } catch (err) {
+      console.warn('Could not record settlement in backend:', err.message);
+    }
   };
 
   const tableShareUrl = `${window.location.origin}/?table=${tableNum}`;
@@ -639,52 +722,26 @@ export default function CustomerMenuOrdering({ tableId = '102', onExit, onBackTo
 
               {/* Items List */}
               <div className="space-y-2.5 text-xs">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <p className="font-medium text-[#102A43] text-xs">Truffle Risotto</p>
-                    <p className="text-[#627D98] text-[11px]">x1</p>
+                {placedOrders.map((item, idx) => (
+                  <div key={idx} className="flex justify-between items-start">
+                    <div>
+                      <p className="font-medium text-[#102A43] text-xs">{item.title}</p>
+                      <p className="text-[#627D98] text-[11px]">x{item.qty}</p>
+                    </div>
+                    <span className="font-medium text-[#102A43]">₹{item.price * item.qty}</span>
                   </div>
-                  <span className="font-medium text-[#102A43]">$38.00</span>
-                </div>
-
-                <div className="flex justify-between items-start">
-                  <div>
-                    <p className="font-medium text-[#102A43] text-xs">Pan-Seared Scallops</p>
-                    <p className="text-[#627D98] text-[11px]">x2</p>
-                  </div>
-                  <span className="font-medium text-[#102A43]">$46.00</span>
-                </div>
-
-                <div className="flex justify-between items-start">
-                  <div>
-                    <p className="font-medium text-[#102A43] text-xs">Artisan Sourdough</p>
-                    <p className="text-[#627D98] text-[11px]">x1</p>
-                  </div>
-                  <span className="font-medium text-[#102A43]">$12.00</span>
-                </div>
-
-                <div className="flex justify-between items-start">
-                  <div>
-                    <p className="font-medium text-[#102A43] text-xs">Sparkling Water</p>
-                    <p className="text-[#627D98] text-[11px]">x1</p>
-                  </div>
-                  <span className="font-medium text-[#102A43]">$8.00</span>
-                </div>
+                ))}
               </div>
 
-              {/* Subtotal, Tax, Gratuity */}
+              {/* Subtotal & Tax */}
               <div className="pt-2.5 border-t border-slate-100 space-y-1.5 text-xs text-[#627D98]">
                 <div className="flex justify-between">
                   <span>Subtotal</span>
-                  <span className="text-[#102A43] font-medium">$104.00</span>
+                  <span className="text-[#102A43] font-medium">₹{invoiceSubtotal.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span>Tax (8.5%)</span>
-                  <span className="text-[#102A43] font-medium">$8.84</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Gratuity (18% included)</span>
-                  <span className="text-[#102A43] font-medium">$18.72</span>
+                  <span>GST (5%)</span>
+                  <span className="text-[#102A43] font-medium">₹{invoiceTax.toFixed(2)}</span>
                 </div>
               </div>
 
@@ -692,12 +749,12 @@ export default function CustomerMenuOrdering({ tableId = '102', onExit, onBackTo
               <div className="pt-3 border-t border-slate-100 flex justify-between items-center">
                 <span className="font-bold text-base text-[#102A43]">Total</span>
                 <span className="font-bold text-xl text-[#102A43]">
-                  {splitBill ? '$65.78' : '$131.56'}
+                  ₹{(splitBill ? splitTotalPerGuest : invoiceTotal).toFixed(2)}
                 </span>
               </div>
               {splitBill && (
                 <p className="text-[11px] text-right text-emerald-700 font-medium -mt-2">
-                  (Split for 2 guests: $65.78 each)
+                  (Split for 2 guests: ₹{splitTotalPerGuest.toFixed(2)} each)
                 </p>
               )}
             </div>
