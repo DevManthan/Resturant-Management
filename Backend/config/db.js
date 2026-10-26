@@ -70,15 +70,29 @@ export const mockStore = {
 };
 
 export const initDb = async () => {
-  const config = {
-    host: process.env.PG_HOST || 'localhost',
-    port: parseInt(process.env.PG_PORT || '5432', 10),
-    database: process.env.PG_DATABASE || 'luxedine_db',
-    user: process.env.PG_USER || 'postgres',
-    password: process.env.PG_PASSWORD || 'postgres',
-    ssl: process.env.PG_SSL === 'true' ? { rejectUnauthorized: false } : false,
-    connectionTimeoutMillis: 2500
-  };
+  let config;
+  const dbUrl = process.env.DATABASE_URL || process.env.SUPABASE_DB_URL;
+
+  if (dbUrl) {
+    // Hosted PostgreSQL / Supabase connection via connection string URI
+    const isSsl = dbUrl.includes('supabase') || dbUrl.includes('pooler') || process.env.PG_SSL === 'true' || process.env.NODE_ENV === 'production';
+    config = {
+      connectionString: dbUrl,
+      ssl: isSsl ? { rejectUnauthorized: false } : false,
+      connectionTimeoutMillis: 10000
+    };
+  } else {
+    // Discrete local environment parameters
+    config = {
+      host: process.env.PG_HOST || 'localhost',
+      port: parseInt(process.env.PG_PORT || '5432', 10),
+      database: process.env.PG_DATABASE || 'luxedine_db',
+      user: process.env.PG_USER || 'postgres',
+      password: process.env.PG_PASSWORD || 'postgres',
+      ssl: process.env.PG_SSL === 'true' ? { rejectUnauthorized: false } : false,
+      connectionTimeoutMillis: 10000
+    };
+  }
 
   try {
     pool = new Pool(config);
@@ -86,7 +100,8 @@ export const initDb = async () => {
     await client.query('SELECT NOW()');
     client.release();
     isPgConnected = true;
-    console.log(`[Database] Successfully connected to PostgreSQL database: "${config.database}" on ${config.host}:${config.port}`);
+    const target = dbUrl ? 'Cloud PostgreSQL / Supabase' : `"${config.database}" on ${config.host}:${config.port}`;
+    console.log(`[Database] Successfully connected to PostgreSQL: ${target}`);
   } catch (err) {
     isPgConnected = false;
     console.warn(`[Database] PostgreSQL connection failed (${err.message}).`);
