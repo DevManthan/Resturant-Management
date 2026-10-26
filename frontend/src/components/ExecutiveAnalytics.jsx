@@ -76,10 +76,10 @@ export default function ExecutiveAnalytics() {
   const donutData = (analyticsData?.categoryBreakdown && analyticsData.categoryBreakdown.length > 0)
     ? analyticsData.categoryBreakdown
     : [
-        { name: 'Drinks', value: 45, color: '#64748B', quantity: 0 },
-        { name: 'Mains', value: 35, color: '#0F172A', quantity: 0 },
-        { name: 'Starters', value: 12, color: '#334155', quantity: 0 },
-        { name: 'Desserts', value: 8, color: '#94A3B8', quantity: 0 }
+        { name: 'Drinks', value: 0, color: '#64748B', quantity: 0 },
+        { name: 'Mains', value: 0, color: '#0F172A', quantity: 0 },
+        { name: 'Starters', value: 0, color: '#334155', quantity: 0 },
+        { name: 'Desserts', value: 0, color: '#94A3B8', quantity: 0 }
       ];
 
   const currentDishSales = analyticsData?.dishSalesByRange?.[dishRange] || [];

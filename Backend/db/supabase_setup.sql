@@ -214,20 +214,20 @@ ON CONFLICT (menu_id) DO UPDATE SET
     image_url = EXCLUDED.image_url,
     description = EXCLUDED.description;
 
--- Seed Sample Bookings
+-- Seed Sample Bookings (Dated yesterday so today's daily ledger starts at zero)
 INSERT INTO booking (booking_id, customer_id, table_id, booking_date, booking_time, guest_count, special_preferences, status)
 VALUES
-    (1, 1, '#102', CURRENT_DATE, '19:30', 4, 'Window table preferred', 'Seated'),
-    (2, 2, '#103', CURRENT_DATE, '20:00', 6, 'Birthday celebration cake', 'Confirmed'),
-    (3, 3, '#101', CURRENT_DATE, '20:30', 2, 'Quiet anniversary seating', 'Confirmed')
+    (1, 1, '#102', CURRENT_DATE - INTERVAL '1 day', '19:30', 4, 'Window table preferred', 'Seated'),
+    (2, 2, '#103', CURRENT_DATE - INTERVAL '1 day', '20:00', 6, 'Birthday celebration cake', 'Confirmed'),
+    (3, 3, '#101', CURRENT_DATE - INTERVAL '1 day', '20:30', 2, 'Quiet anniversary seating', 'Confirmed')
 ON CONFLICT (booking_id) DO NOTHING;
 
--- Seed Sample Active Orders
-INSERT INTO orders (order_id, booking_id, customer_id, table_id, order_status, subtotal, discount, tax, total_amount, special_note)
+-- Seed Sample Historical Orders (Dated yesterday so today's daily metrics start clean at zero)
+INSERT INTO orders (order_id, booking_id, customer_id, table_id, order_status, subtotal, discount, tax, total_amount, special_note, created_at)
 VALUES
-    (101, 1, 1, '#102', 'preparing', 1580.00, 0.00, 79.00, 1659.00, 'Mild spice level on Biryani'),
-    (102, 2, 2, '#103', 'pending', 960.00, 0.00, 48.00, 1008.00, 'Serve with extra mint chutney'),
-    (103, 3, 3, '#101', 'ready', 1890.00, 0.00, 94.50, 1984.50, 'Table 101 anniversary couple')
+    (101, 1, 1, '#102', 'preparing', 1580.00, 0.00, 79.00, 1659.00, 'Mild spice level on Biryani', CURRENT_DATE - INTERVAL '1 day'),
+    (102, 2, 2, '#103', 'pending', 960.00, 0.00, 48.00, 1008.00, 'Serve with extra mint chutney', CURRENT_DATE - INTERVAL '1 day'),
+    (103, 3, 3, '#101', 'ready', 1890.00, 0.00, 94.50, 1984.50, 'Table 101 anniversary couple', CURRENT_DATE - INTERVAL '1 day')
 ON CONFLICT (order_id) DO NOTHING;
 
 -- Seed Order Items

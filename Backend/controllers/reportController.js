@@ -13,9 +13,33 @@ export const getDailyReports = async (req, res) => {
 
 export const getExecutiveAnalytics = async (req, res) => {
   const { range = 'Week' } = req.query;
+  const normalizedRange = (range || 'Week').toLowerCase();
 
   try {
-    // 1. Net Revenue, Order Count, and Average Ticket from PostgreSQL
+    // 0. Time-scoped Date Filters: Day (today only), Week (last 7 days), Month (last 30 days)
+    let orderWhere = "WHERE o.order_status != 'cancelled'";
+    let orderBaseWhere = "WHERE order_status != 'cancelled'";
+    let bookingWhere = "";
+    let billWhere = "";
+
+    if (normalizedRange === 'day' || normalizedRange === 'daily') {
+      orderWhere += " AND o.created_at::date = CURRENT_DATE";
+      orderBaseWhere += " AND created_at::date = CURRENT_DATE";
+      bookingWhere = "WHERE booking_date = CURRENT_DATE";
+      billWhere = "WHERE bill_time::date = CURRENT_DATE";
+    } else if (normalizedRange === 'week' || normalizedRange === 'weekly') {
+      orderWhere += " AND o.created_at >= (NOW() - INTERVAL '7 days')";
+      orderBaseWhere += " AND created_at >= (NOW() - INTERVAL '7 days')";
+      bookingWhere = "WHERE booking_date >= (CURRENT_DATE - INTERVAL '7 days')";
+      billWhere = "WHERE bill_time >= (NOW() - INTERVAL '7 days')";
+    } else if (normalizedRange === 'month' || normalizedRange === 'monthly') {
+      orderWhere += " AND o.created_at >= (NOW() - INTERVAL '30 days')";
+      orderBaseWhere += " AND created_at >= (NOW() - INTERVAL '30 days')";
+      bookingWhere = "WHERE booking_date >= (CURRENT_DATE - INTERVAL '30 days')";
+      billWhere = "WHERE bill_time >= (NOW() - INTERVAL '30 days')";
+    }
+
+    // 1. Net Revenue, Order Count, and Average Ticket from PostgreSQL (scoped to selected range)
     let netRevenue = 0;
     let totalOrders = 0;
     let totalCovers = 0;
@@ -27,7 +51,7 @@ export const getExecutiveAnalytics = async (req, res) => {
         COALESCE(SUM(total_amount), 0) as total_rev,
         COUNT(*) as total_orders
       FROM orders
-      WHERE order_status != 'cancelled'
+      ${orderBaseWhere}
     `);
 
     if (orderStats && orderStats.rows && orderStats.rows.length > 0) {
@@ -36,20 +60,22 @@ export const getExecutiveAnalytics = async (req, res) => {
       avgTicketSize = totalOrders > 0 ? Math.round(netRevenue / totalOrders) : 0;
     }
 
-    // 2. Total Guests / Covers from bookings & orders
+    // 2. Total Guests / Covers from bookings & orders (scoped to selected range)
     const coverStats = await query(`
-      SELECT COALESCE(SUM(guest_count), 0) as total_guests FROM booking
+      SELECT COALESCE(SUM(guest_count), 0) as total_guests 
+      FROM booking
+      ${bookingWhere}
     `);
-    if (coverStats && coverStats.rows && coverStats.rows.length > 0) {
-      const bGuests = parseInt(coverStats.rows[0].total_guests, 10) || 0;
-      totalCovers = Math.max(bGuests, totalOrders * 2);
+    const bGuests = coverStats?.rows?.[0]?.total_guests ? parseInt(coverStats.rows[0].total_guests, 10) : 0;
+    if (totalOrders === 0) {
+      totalCovers = 0;
     } else {
-      totalCovers = totalOrders * 2;
+      totalCovers = Math.max(bGuests, totalOrders * 2);
     }
 
-    // 3. Top Performer Dish from order_details
+    // 3. Top Performer Dish from order_details (scoped to selected range)
     let topDish = {
-      name: 'Alphonso Mango Saffron Lassi',
+      name: 'No orders yet',
       count: 0,
       revenue: 0
     };
@@ -58,12 +84,14 @@ export const getExecutiveAnalytics = async (req, res) => {
       SELECT m.item_name, SUM(od.quantity) as total_qty, SUM(od.total_price) as total_rev
       FROM order_details od
       JOIN menu_items m ON od.item_id = m.menu_id
+      JOIN orders o ON od.order_id = o.order_id
+      ${orderWhere}
       GROUP BY m.item_name
-      ORDER BY total_qty DESC
+      ORDER BY total_qty DESC, total_rev DESC
       LIMIT 1
     `);
 
-    if (topDishRes && topDishRes.rows && topDishRes.rows.length > 0) {
+    if (topDishRes && topDishRes.rows && topDishRes.rows.length > 0 && parseInt(topDishRes.rows[0].total_qty, 10) > 0) {
       topDish = {
         name: topDishRes.rows[0].item_name,
         count: parseInt(topDishRes.rows[0].total_qty, 10) || 0,
@@ -71,7 +99,7 @@ export const getExecutiveAnalytics = async (req, res) => {
       };
     }
 
-    // 4. Sales by Category (Real distribution from order_details)
+    // 4. Sales by Category (Real distribution from order_details scoped to selected range)
     const catRes = await query(`
       SELECT 
         CASE 
@@ -85,6 +113,8 @@ export const getExecutiveAnalytics = async (req, res) => {
         SUM(od.total_price) as rev
       FROM order_details od
       JOIN menu_items m ON od.item_id = m.menu_id
+      JOIN orders o ON od.order_id = o.order_id
+      ${orderWhere}
       GROUP BY 1
       ORDER BY qty DESC
     `);
@@ -111,24 +141,25 @@ export const getExecutiveAnalytics = async (req, res) => {
         };
       });
     } else {
+      // True zero state for period with no orders
       categoryBreakdown = [
-        { name: 'Mains', value: 45, quantity: 14, revenue: 5390, color: '#0F172A' },
-        { name: 'Drinks', value: 35, quantity: 17, revenue: 3240, color: '#64748B' },
-        { name: 'Starters', value: 12, quantity: 2, revenue: 960, color: '#334155' },
-        { name: 'Desserts', value: 8, quantity: 3, revenue: 830, color: '#94A3B8' }
+        { name: 'Mains', value: 0, quantity: 0, revenue: 0, color: '#0F172A' },
+        { name: 'Drinks', value: 0, quantity: 0, revenue: 0, color: '#64748B' },
+        { name: 'Starters', value: 0, quantity: 0, revenue: 0, color: '#334155' },
+        { name: 'Desserts', value: 0, quantity: 0, revenue: 0, color: '#94A3B8' }
       ];
     }
 
     // 5. Interactive Revenue Trend (Day, Week, Month) from real orders
+    // Day trend: ONLY orders from CURRENT_DATE (starts at 0 on a new day)
     const hourlyOrders = await query(`
       SELECT 
-        TO_CHAR(created_at, 'HH12 AM') as hour_label,
         EXTRACT(HOUR FROM created_at) as hr,
         SUM(total_amount) as rev
       FROM orders
-      WHERE order_status != 'cancelled'
-      GROUP BY 1, 2
-      ORDER BY 2
+      WHERE order_status != 'cancelled' AND created_at::date = CURRENT_DATE
+      GROUP BY 1
+      ORDER BY 1
     `);
 
     const standardHours = [
@@ -148,34 +179,48 @@ export const getExecutiveAnalytics = async (req, res) => {
       };
     });
 
+    // Week trend: Real daily revenue over the last 7 days
     const dowOrders = await query(`
       SELECT 
         TO_CHAR(created_at, 'Dy') as day_label,
-        EXTRACT(DOW FROM created_at) as dow,
         SUM(total_amount) as rev
       FROM orders
-      WHERE order_status != 'cancelled'
-      GROUP BY 1, 2
-      ORDER BY 2
+      WHERE order_status != 'cancelled' AND created_at >= (CURRENT_DATE - INTERVAL '6 days')
+      GROUP BY 1
     `);
 
     const daysOfWeek = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-    const currentDayName = new Date().toLocaleDateString('en-US', { weekday: 'short' });
-
     const weekTrend = daysOfWeek.map((d) => {
       const match = (dowOrders?.rows || []).find((w) => w.day_label === d);
       return {
         day: d,
-        revenue: match ? Math.round(parseFloat(match.rev)) : (d === currentDayName ? Math.round(netRevenue) : 0)
+        revenue: match ? Math.round(parseFloat(match.rev)) : 0
       };
     });
 
-    const monthTrend = [
-      { day: 'Week 1', revenue: 0 },
-      { day: 'Week 2', revenue: 0 },
-      { day: 'Week 3', revenue: 0 },
-      { day: 'Week 4', revenue: Math.round(netRevenue) }
-    ];
+    // Month trend: Real 4-week bucketing over the last 28 days
+    const monthRes = await query(`
+      SELECT 
+        CASE 
+          WHEN created_at >= (CURRENT_DATE - INTERVAL '7 days') THEN 'Week 4'
+          WHEN created_at >= (CURRENT_DATE - INTERVAL '14 days') THEN 'Week 3'
+          WHEN created_at >= (CURRENT_DATE - INTERVAL '21 days') THEN 'Week 2'
+          ELSE 'Week 1'
+        END as week_bucket,
+        SUM(total_amount) as rev
+      FROM orders
+      WHERE order_status != 'cancelled' AND created_at >= (CURRENT_DATE - INTERVAL '28 days')
+      GROUP BY 1
+    `);
+
+    const monthBuckets = ['Week 1', 'Week 2', 'Week 3', 'Week 4'];
+    const monthTrend = monthBuckets.map((w) => {
+      const match = (monthRes?.rows || []).find((m) => m.week_bucket === w);
+      return {
+        day: w,
+        revenue: match ? Math.round(parseFloat(match.rev)) : 0
+      };
+    });
 
     const barDataByRange = {
       Day: dayTrend,
@@ -183,10 +228,11 @@ export const getExecutiveAnalytics = async (req, res) => {
       Month: monthTrend
     };
 
-    // 6. Payment Modes breakdown from bill table
+    // 6. Payment Modes breakdown from bill table (scoped to selected range)
     const payRes = await query(`
       SELECT payment_mode, SUM(total_bill) as total, COUNT(*) as count
       FROM bill
+      ${billWhere}
       GROUP BY payment_mode
     `);
     const paymentBreakdown = {
@@ -208,7 +254,7 @@ export const getExecutiveAnalytics = async (req, res) => {
     const fetchDishBreakdown = async (intervalFilter) => {
       let where = "WHERE o.order_status != 'cancelled'";
       if (intervalFilter === 'daily') {
-        where += " AND o.created_at >= CURRENT_DATE";
+        where += " AND o.created_at::date = CURRENT_DATE";
       } else if (intervalFilter === 'weekly') {
         where += " AND o.created_at >= (NOW() - INTERVAL '7 days')";
       } else if (intervalFilter === 'monthly') {
@@ -249,12 +295,13 @@ export const getExecutiveAnalytics = async (req, res) => {
       Monthly: await fetchDishBreakdown('monthly')
     };
 
-    // 8. Recent Transactions from orders
+    // 8. Recent Transactions from orders (scoped to selected range)
     const recentRes = await query(`
       SELECT o.order_id, o.table_id, o.order_status, o.total_amount, o.created_at,
              COUNT(od.order_item_id) as items_count
       FROM orders o
       LEFT JOIN order_details od ON o.order_id = od.order_id
+      ${orderWhere}
       GROUP BY o.order_id
       ORDER BY o.created_at DESC
       LIMIT 5
@@ -272,6 +319,7 @@ export const getExecutiveAnalytics = async (req, res) => {
     return res.json({
       success: true,
       source: 'postgresql',
+      range: normalizedRange,
       data: {
         kpis: {
           netRevenue: Math.round(netRevenue),
@@ -290,8 +338,9 @@ export const getExecutiveAnalytics = async (req, res) => {
     });
   } catch (err) {
     console.warn('[ExecutiveAnalytics] PostgreSQL query fallback:', err.message);
-    const totalRev = mockStore.orders.reduce((sum, o) => sum + (o.total_amount || 0), 0);
-    const totalOrders = mockStore.orders.length;
+    const isDaily = normalizedRange === 'day' || normalizedRange === 'daily';
+    const totalRev = isDaily ? 0 : mockStore.orders.reduce((sum, o) => sum + (o.total_amount || 0), 0);
+    const totalOrders = isDaily ? 0 : mockStore.orders.length;
     return res.json({
       success: true,
       source: 'mock_fallback',
@@ -302,20 +351,25 @@ export const getExecutiveAnalytics = async (req, res) => {
           totalCovers: totalOrders * 2,
           avgTicketSize: totalOrders > 0 ? Math.round(totalRev / totalOrders) : 0,
           avgTableTurn: 38,
-          topDish: { name: 'Alphonso Mango Saffron Lassi', count: 9, revenue: 1980 }
+          topDish: isDaily ? { name: 'No orders yet', count: 0, revenue: 0 } : { name: 'Alphonso Mango Saffron Lassi', count: 9, revenue: 1980 }
         },
         barDataByRange: {
-          Day: [{ day: '4 PM', revenue: 5785 }, { day: '5 PM', revenue: 5051 }],
-          Week: [{ day: 'Sun', revenue: totalRev }],
-          Month: [{ day: 'Week 4', revenue: totalRev }]
+          Day: [{ day: '12 PM', revenue: 0 }, { day: '2 PM', revenue: 0 }, { day: '4 PM', revenue: 0 }, { day: '6 PM', revenue: 0 }, { day: '8 PM', revenue: 0 }, { day: '10 PM', revenue: 0 }],
+          Week: [{ day: 'Mon', revenue: 0 }, { day: 'Tue', revenue: 0 }, { day: 'Wed', revenue: 0 }, { day: 'Thu', revenue: 0 }, { day: 'Fri', revenue: 0 }, { day: 'Sat', revenue: 0 }, { day: 'Sun', revenue: 0 }],
+          Month: [{ day: 'Week 1', revenue: 0 }, { day: 'Week 2', revenue: 0 }, { day: 'Week 3', revenue: 0 }, { day: 'Week 4', revenue: 0 }]
         },
         categoryBreakdown: [
-          { name: 'Drinks', value: 47, quantity: 17, revenue: 3240, color: '#64748B' },
-          { name: 'Mains', value: 39, quantity: 14, revenue: 5390, color: '#0F172A' },
-          { name: 'Desserts', value: 8, quantity: 3, revenue: 830, color: '#94A3B8' },
-          { name: 'Starters', value: 6, quantity: 2, revenue: 960, color: '#334155' }
+          { name: 'Mains', value: 0, quantity: 0, revenue: 0, color: '#0F172A' },
+          { name: 'Drinks', value: 0, quantity: 0, revenue: 0, color: '#64748B' },
+          { name: 'Starters', value: 0, quantity: 0, revenue: 0, color: '#334155' },
+          { name: 'Desserts', value: 0, quantity: 0, revenue: 0, color: '#94A3B8' }
         ],
-        paymentBreakdown: { UPI: totalRev, Card: 0, Cash: 0 },
+        paymentBreakdown: { UPI: 0, Card: 0, Cash: 0 },
+        dishSalesByRange: {
+          Daily: [],
+          Weekly: [],
+          Monthly: []
+        },
         recentOrders: []
       }
     });
