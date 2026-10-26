@@ -1181,50 +1181,60 @@ export default function LandingPage() {
           </div>
 
           {/* Reviews Grid (Max 3-4 reviews) */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {reviews.map((rev, idx) => (
-              <div
-                key={rev.review_id || idx}
-                className="bg-white rounded-3xl p-6 border border-[#E8E2D5] shadow-xs hover:shadow-lg hover:border-[#B88E52]/40 transition-all flex flex-col justify-between space-y-4 group"
-              >
-                <div className="space-y-3">
-                  {/* Star Rating */}
-                  <div className="flex items-center gap-1">
-                    {[1, 2, 3, 4, 5].map((s) => (
-                      <Star
-                        key={s}
-                        className={`w-4 h-4 ${
-                          s <= (rev.rating || 5)
-                            ? 'fill-[#B88E52] text-[#B88E52]'
-                            : 'text-slate-200'
-                        }`}
-                      />
-                    ))}
+          {reviews.length === 0 ? (
+            <div className="bg-white/60 backdrop-blur-sm rounded-3xl p-10 border border-[#E8E2D5] text-center max-w-lg mx-auto shadow-2xs">
+              <Star className="w-6 h-6 text-[#B88E52] mx-auto mb-2 fill-[#FAF3E8]" />
+              <p className="font-serif font-bold text-slate-900 text-sm">Verified Guest Critiques</p>
+              <p className="text-xs text-slate-500 mt-1">
+                Guest reflections and culinary ratings will appear here automatically after table dining settlement.
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              {reviews.map((rev, idx) => (
+                <div
+                  key={rev.review_id || idx}
+                  className="bg-white rounded-3xl p-6 border border-[#E8E2D5] shadow-xs hover:shadow-lg hover:border-[#B88E52]/40 transition-all flex flex-col justify-between space-y-4 group"
+                >
+                  <div className="space-y-3">
+                    {/* Star Rating */}
+                    <div className="flex items-center gap-1">
+                      {[1, 2, 3, 4, 5].map((s) => (
+                        <Star
+                          key={s}
+                          className={`w-4 h-4 ${
+                            s <= (rev.rating || 5)
+                              ? 'fill-[#B88E52] text-[#B88E52]'
+                              : 'text-slate-200'
+                          }`}
+                        />
+                      ))}
+                    </div>
+
+                    {/* Comment */}
+                    <p className="text-xs text-slate-700 italic leading-relaxed">
+                      "{rev.comments || 'Sublime culinary experience and impeccable hospitality.'}"
+                    </p>
                   </div>
 
-                  {/* Comment */}
-                  <p className="text-xs text-slate-700 italic leading-relaxed">
-                    "{rev.comments || 'Sublime culinary experience and impeccable hospitality.'}"
-                  </p>
-                </div>
-
-                {/* Footer Reviewer Meta */}
-                <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
-                  <div>
-                    <span className="font-serif font-bold text-xs text-slate-900 block">
-                      {rev.customer_name || 'Verified Guest'}
-                    </span>
-                    <span className="text-[10px] text-slate-400">
-                      {rev.review_date ? new Date(rev.review_date).toLocaleDateString(undefined, { month: 'short', year: 'numeric' }) : 'Recent Visit'}
+                  {/* Footer Reviewer Meta */}
+                  <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
+                    <div>
+                      <span className="font-serif font-bold text-xs text-slate-900 block">
+                        {rev.customer_name || 'Verified Guest'}
+                      </span>
+                      <span className="text-[10px] text-slate-400">
+                        {rev.review_date ? new Date(rev.review_date).toLocaleDateString(undefined, { month: 'short', year: 'numeric' }) : 'Recent Visit'}
+                      </span>
+                    </div>
+                    <span className="text-[10px] text-emerald-800 font-bold bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                      Verified Dine
                     </span>
                   </div>
-                  <span className="text-[10px] text-emerald-800 font-bold bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                    Verified Dine
-                  </span>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       </section>
 

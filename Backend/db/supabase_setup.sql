@@ -214,64 +214,13 @@ ON CONFLICT (menu_id) DO UPDATE SET
     image_url = EXCLUDED.image_url,
     description = EXCLUDED.description;
 
--- Seed Sample Bookings (Dated yesterday so today's daily ledger starts at zero)
-INSERT INTO booking (booking_id, customer_id, table_id, booking_date, booking_time, guest_count, special_preferences, status)
-VALUES
-    (1, 1, '#102', CURRENT_DATE - INTERVAL '1 day', '19:30', 4, 'Window table preferred', 'Seated'),
-    (2, 2, '#103', CURRENT_DATE - INTERVAL '1 day', '20:00', 6, 'Birthday celebration cake', 'Confirmed'),
-    (3, 3, '#101', CURRENT_DATE - INTERVAL '1 day', '20:30', 2, 'Quiet anniversary seating', 'Confirmed')
-ON CONFLICT (booking_id) DO NOTHING;
-
--- Seed Sample Historical Orders (Dated yesterday so today's daily metrics start clean at zero)
-INSERT INTO orders (order_id, booking_id, customer_id, table_id, order_status, subtotal, discount, tax, total_amount, special_note, created_at)
-VALUES
-    (101, 1, 1, '#102', 'preparing', 1580.00, 0.00, 79.00, 1659.00, 'Mild spice level on Biryani', CURRENT_DATE - INTERVAL '1 day'),
-    (102, 2, 2, '#103', 'pending', 960.00, 0.00, 48.00, 1008.00, 'Serve with extra mint chutney', CURRENT_DATE - INTERVAL '1 day'),
-    (103, 3, 3, '#101', 'ready', 1890.00, 0.00, 94.50, 1984.50, 'Table 101 anniversary couple', CURRENT_DATE - INTERVAL '1 day')
-ON CONFLICT (order_id) DO NOTHING;
-
--- Seed Order Items
-INSERT INTO order_details (order_item_id, order_id, item_id, quantity, unit_price, total_price, note, status)
-VALUES
-    (1, 101, 7, 2, 620.00, 1240.00, 'Medium spicy', 'preparing'),
-    (2, 101, 14, 2, 220.00, 440.00, 'Chilled', 'ready'),
-    (3, 102, 1, 2, 480.00, 960.00, 'Extra creamy', 'pending'),
-    (4, 103, 9, 2, 580.00, 1160.00, 'Boneless', 'ready'),
-    (5, 103, 10, 4, 140.00, 560.00, 'Crispy', 'ready')
-ON CONFLICT (order_item_id) DO NOTHING;
-
--- Seed Sample Verified Reviews for Landing Page
-INSERT INTO review (review_id, order_id, customer_id, rating, food_quality, service, comments, is_anonymous, display_on)
-VALUES
-    (1, 103, 3, 5, 5, 5, 'The Awadhi Dum Biryani and Dal Bukhara were transcendent. Truly a Michelin-caliber Indian dining experience.', false, true),
-    (2, 101, 1, 5, 5, 5, 'Seamless contactless table ordering! We ordered 3 separate rounds from our phones and each arrived hot and synchronized.', false, true),
-    (3, 102, 2, 5, 5, 5, 'The Shahi Tukda with Rabri brought me back to Old Delhi. Exemplary floor service and gorgeous presentation.', false, true)
-ON CONFLICT (review_id) DO NOTHING;
-
--- Seed Initial Daily Financial Report
-INSERT INTO daily_reports (report_date, total_orders, total_customers, total_revenue, profit, profit_margin, avg_rating, most_ordered, peak_hour, cash_payment, card_payment, upi_payment)
-VALUES (
-    CURRENT_DATE,
-    14,
-    38,
-    18450.00,
-    9200.00,
-    49.80,
-    4.9,
-    'Classic Old Delhi Butter Chicken',
-    '8:00 PM - 9:30 PM',
-    2400.00,
-    6800.00,
-    9250.00
-) ON CONFLICT (report_date) DO NOTHING;
-
--- Ensure sequences are synced so new inserts don't collide with seeded IDs
+-- Ensure sequences are initialized
 SELECT setval('owner_owner_id_seq', COALESCE((SELECT MAX(owner_id) FROM owner), 1));
-SELECT setval('customer_customer_id_seq', COALESCE((SELECT MAX(customer_id) FROM customer), 1));
-SELECT setval('booking_booking_id_seq', COALESCE((SELECT MAX(booking_id) FROM booking), 1));
-SELECT setval('menu_items_menu_id_seq', COALESCE((SELECT MAX(menu_id) FROM menu_items), 1));
-SELECT setval('orders_order_id_seq', COALESCE((SELECT MAX(order_id) FROM orders), 103));
-SELECT setval('order_details_order_item_id_seq', COALESCE((SELECT MAX(order_item_id) FROM order_details), 5));
-SELECT setval('bill_bill_id_seq', COALESCE((SELECT MAX(bill_id) FROM bill), 1));
-SELECT setval('review_review_id_seq', COALESCE((SELECT MAX(review_id) FROM review), 3));
-SELECT setval('daily_reports_report_id_seq', COALESCE((SELECT MAX(report_id) FROM daily_reports), 1));
+SELECT setval('customer_customer_id_seq', 1, false);
+SELECT setval('booking_booking_id_seq', 1, false);
+SELECT setval('menu_items_menu_id_seq', COALESCE((SELECT MAX(menu_id) FROM menu_items), 16));
+SELECT setval('orders_order_id_seq', 101, false);
+SELECT setval('order_details_order_item_id_seq', 1, false);
+SELECT setval('bill_bill_id_seq', 1, false);
+SELECT setval('review_review_id_seq', 1, false);
+SELECT setval('daily_reports_report_id_seq', 1, false);

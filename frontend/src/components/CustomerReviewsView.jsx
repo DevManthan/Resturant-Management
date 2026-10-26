@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Star,
   MessageSquare,
@@ -9,21 +9,47 @@ import {
   Eye,
   EyeOff
 } from 'lucide-react';
-import { initialReviews } from '../data/mockData';
+import { reviewApi } from '../services/api';
 
 export default function CustomerReviewsView() {
-  const [reviews, setReviews] = useState(initialReviews);
+  const [reviews, setReviews] = useState([]);
   const [filterRating, setFilterRating] = useState('ALL');
 
-  const avgOverall = (
-    reviews.reduce((acc, r) => acc + r.RATING, 0) / (reviews.length || 1)
-  ).toFixed(1);
-  const avgFood = (
-    reviews.reduce((acc, r) => acc + r.FOOD_QUALITY, 0) / (reviews.length || 1)
-  ).toFixed(1);
-  const avgService = (
-    reviews.reduce((acc, r) => acc + r.SERVICE, 0) / (reviews.length || 1)
-  ).toFixed(1);
+  useEffect(() => {
+    const loadReviews = async () => {
+      try {
+        const res = await reviewApi.getAll();
+        if (res && res.data && Array.isArray(res.data)) {
+          const mapped = res.data.map(r => ({
+            REVIEW_ID: r.review_id || r.REVIEW_ID,
+            ORDER_ID: r.order_id || r.ORDER_ID || '101',
+            CUSTOMER_NAME: r.customer_name || r.CUSTOMER_NAME || 'Guest',
+            RATING: r.rating || r.RATING || 5,
+            FOOD_QUALITY: r.food_quality || r.FOOD_QUALITY || 5,
+            SERVICE: r.service || r.SERVICE || 5,
+            COMMENTS: r.comments || r.COMMENTS || '',
+            REVIEW_DATE: r.review_date ? new Date(r.review_date).toLocaleDateString() : 'Recent',
+            IS_ANONYMOUS: r.is_anonymous ?? false,
+            DISPLAY_ON: r.display_on ?? true
+          }));
+          setReviews(mapped);
+        }
+      } catch (err) {
+        console.warn('Could not load reviews:', err.message);
+      }
+    };
+    loadReviews();
+  }, []);
+
+  const avgOverall = reviews.length > 0
+    ? (reviews.reduce((acc, r) => acc + (r.RATING || 5), 0) / reviews.length).toFixed(1)
+    : '5.0';
+  const avgFood = reviews.length > 0
+    ? (reviews.reduce((acc, r) => acc + (r.FOOD_QUALITY || 5), 0) / reviews.length).toFixed(1)
+    : '5.0';
+  const avgService = reviews.length > 0
+    ? (reviews.reduce((acc, r) => acc + (r.SERVICE || 5), 0) / reviews.length).toFixed(1)
+    : '5.0';
 
   const toggleDisplay = (reviewId) => {
     setReviews(
@@ -195,6 +221,12 @@ export default function CustomerReviewsView() {
               </div>
             </div>
           ))}
+
+          {filteredReviews.length === 0 && (
+            <div className="py-12 text-center text-slate-400 text-xs">
+              No guest reviews submitted yet. Reviews will appear here automatically when guests rate their meal post-payment.
+            </div>
+          )}
         </div>
       </div>
     </div>

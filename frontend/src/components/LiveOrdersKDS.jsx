@@ -75,55 +75,8 @@ export default function LiveOrdersKDS() {
     return () => clearInterval(interval);
   }, []);
 
-  // Live order tickets
-  const [orders, setOrders] = useState([
-    {
-      id: '102',
-      table: '#102',
-      type: 'Dine-In',
-      timeElapsed: '08:45',
-      targetTime: 'Target: 15m',
-      status: 'pending',
-      items: [
-        { name: '1x Truffle Risotto', done: false },
-        { name: '2x Scallops', done: false, note: 'No Garlic' }
-      ]
-    },
-    {
-      id: '103',
-      table: '#103',
-      type: 'UberEats',
-      timeElapsed: '02:10',
-      targetTime: 'Target: 20m',
-      status: 'pending',
-      items: [{ name: '1x Beef Wellington', done: false }]
-    },
-    {
-      id: '205',
-      table: '#205',
-      type: 'Dine-In',
-      timeElapsed: '12:20',
-      targetTime: 'Target: 25m',
-      status: 'preparing',
-      items: [
-        { name: '1x Atlantic Salmon', done: true },
-        { name: '1x Lemon Tart', done: false }
-      ]
-    },
-    {
-      id: '108',
-      table: '#108',
-      type: 'Dine-In',
-      timeElapsed: '15:10',
-      targetTime: 'Overdue',
-      isOverdue: true,
-      status: 'ready',
-      items: [
-        { name: '2x Ribeye Steak', done: true },
-        { name: '1x Caesar Salad', done: true }
-      ]
-    }
-  ]);
+  // Live order tickets (starts clean with zero dummy tickets)
+  const [orders, setOrders] = useState([]);
 
   // Sync with PostgreSQL KDS queue on mount and live polling
   useEffect(() => {

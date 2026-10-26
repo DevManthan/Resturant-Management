@@ -21,7 +21,7 @@ const DEFAULT_TABLES = [
   { id: 'T-01', name: 'T-01', seats: 2, status: 'Available', party: '', time: '' },
   { id: 'T-02', name: 'T-02', seats: 4, status: 'Available', party: '', time: '' },
   { id: 'Booth-01', name: 'Booth-01', seats: 6, status: 'Available', party: '', time: '' },
-  { id: 'T-04', name: 'T-04', seats: 2, status: 'Maintenance', party: '', time: '' },
+  { id: 'T-04', name: 'T-04', seats: 2, status: 'Available', party: '', time: '' },
   { id: 'T-05', name: 'T-05', seats: 4, status: 'Available', party: '', time: '' },
   { id: 'Booth-02', name: 'Booth-02', seats: 8, status: 'Available', party: '', time: '' }
 ];
