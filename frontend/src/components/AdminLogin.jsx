@@ -5,7 +5,6 @@ import {
   Key,
   Shield,
   ArrowLeft,
-  Sparkles,
   CheckCircle2,
   AlertCircle
 } from 'lucide-react';
@@ -22,25 +21,22 @@ export default function AdminLogin({ onLoginSuccess, onBackToHome }) {
     setIsLoading(true);
 
     setTimeout(() => {
-      // Validate credentials (accepts default demo credentials or any reasonable input)
+      const cleanEmail = email.trim().toLowerCase();
+      const cleanPass = password.trim();
+
+      // Validate manager / executive credentials
       if (
-        (email.trim().toLowerCase() === 'vikram@luxedine.in' && password === 'admin123') ||
-        (email.trim().toLowerCase() === 'admin' && password === '1234') ||
-        (email.trim().length > 3 && password.length >= 4)
+        (cleanEmail === 'vikram@luxedine.in' && cleanPass === 'admin123') ||
+        (cleanEmail === 'admin' && (cleanPass === 'admin123' || cleanPass === '1234')) ||
+        (cleanEmail === 'manthan' && (cleanPass === 'admin123' || cleanPass === '1234' || cleanPass === 'manthan'))
       ) {
         sessionStorage.setItem('luxedine_admin_auth', 'true');
         onLoginSuccess();
       } else {
-        setError('Invalid credentials. Use Demo Fill below or password of 4+ characters.');
+        setError('Invalid credentials. Please verify your manager email and password.');
       }
       setIsLoading(false);
     }, 400);
-  };
-
-  const handleDemoFill = () => {
-    setEmail('vikram@luxedine.in');
-    setPassword('admin123');
-    setError(null);
   };
 
   return (
@@ -89,7 +85,7 @@ export default function AdminLogin({ onLoginSuccess, onBackToHome }) {
               <Mail className="w-4 h-4 text-slate-500 absolute left-3.5" />
               <input
                 type="text"
-                placeholder="vikram@luxedine.in"
+                placeholder="Enter email or username"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="w-full h-11 pl-10 pr-3.5 bg-slate-900 border border-slate-700 rounded-xl text-white text-xs placeholder-slate-500 focus:outline-none focus:border-amber-400 transition-colors"
@@ -106,7 +102,7 @@ export default function AdminLogin({ onLoginSuccess, onBackToHome }) {
               <Key className="w-4 h-4 text-slate-500 absolute left-3.5" />
               <input
                 type="password"
-                placeholder="••••••••"
+                placeholder="Enter password or PIN"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="w-full h-11 pl-10 pr-3.5 bg-slate-900 border border-slate-700 rounded-xl text-white text-xs placeholder-slate-500 focus:outline-none focus:border-amber-400 transition-colors"
@@ -115,7 +111,7 @@ export default function AdminLogin({ onLoginSuccess, onBackToHome }) {
             </div>
           </div>
 
-          <div className="pt-2 space-y-2.5">
+          <div className="pt-2">
             <button
               type="submit"
               disabled={isLoading}
@@ -123,15 +119,6 @@ export default function AdminLogin({ onLoginSuccess, onBackToHome }) {
             >
               <Lock className="w-3.5 h-3.5" />
               <span>{isLoading ? 'Verifying...' : 'Sign In to Dashboard'}</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={handleDemoFill}
-              className="w-full h-10 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-amber-300 font-bold text-xs transition-colors cursor-pointer flex items-center justify-center gap-1.5"
-            >
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>1-Click Demo Fill (Owner Credentials)</span>
             </button>
           </div>
         </form>
