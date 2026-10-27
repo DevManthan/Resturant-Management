@@ -329,7 +329,7 @@ export const updateOrderStatus = async (req, res) => {
     if (status === 'completed') {
       const tableId = (dbRes && dbRes.rows && dbRes.rows[0]?.table_id) || order?.table_id;
       if (tableId) {
-        broadcastTableUpdate({ table_id, status: 'Available' });
+        broadcastTableUpdate({ table_id: tableId, status: 'Available' });
       }
     }
 
