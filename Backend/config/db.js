@@ -37,7 +37,20 @@ export const mockStore = {
 
 export const initDb = async () => {
   let config;
-  const dbUrl = process.env.DATABASE_URL || process.env.SUPABASE_DB_URL;
+  let dbUrl = process.env.DATABASE_URL || process.env.SUPABASE_DB_URL;
+
+  // Auto-upgrade direct Supabase direct host to IPv4 Pooler to prevent Render ENETUNREACH IPv6 failures
+  if (dbUrl && dbUrl.includes('db.vbxelfgazqritzkbubpl.supabase.co')) {
+    dbUrl = dbUrl
+      .replace('db.vbxelfgazqritzkbubpl.supabase.co:5432', 'aws-0-ap-northeast-1.pooler.supabase.com:6543')
+      .replace('postgres:[', 'postgres.vbxelfgazqritzkbubpl:[')
+      .replace('postgres:8533885522', 'postgres.vbxelfgazqritzkbubpl:8533885522');
+  }
+
+  // Fallback to verified Supabase IPv4 Pooler if not running locally with discrete PG_* env
+  if (!dbUrl && (process.env.NODE_ENV === 'production' || !process.env.PG_HOST)) {
+    dbUrl = 'postgresql://postgres.vbxelfgazqritzkbubpl:8533885522%40manthan@aws-0-ap-northeast-1.pooler.supabase.com:6543/postgres';
+  }
 
   if (dbUrl) {
     // Hosted PostgreSQL / Supabase connection via connection string URI

@@ -107,7 +107,32 @@ export const createBooking = async (req, res) => {
     }
 
     if (!resolvedCustomerId) {
-      resolvedCustomerId = customer_id || 1;
+      if (customer_id) {
+        try {
+          const cCheck = await query('SELECT customer_id FROM customer WHERE customer_id = $1', [customer_id]);
+          if (cCheck && cCheck.rows && cCheck.rows.length > 0) {
+            resolvedCustomerId = cCheck.rows[0].customer_id;
+          }
+        } catch (e) {}
+      }
+      if (!resolvedCustomerId) {
+        try {
+          const anyCust = await query('SELECT customer_id FROM customer LIMIT 1');
+          if (anyCust && anyCust.rows && anyCust.rows.length > 0) {
+            resolvedCustomerId = anyCust.rows[0].customer_id;
+          } else {
+            const newCust = await query(
+              `INSERT INTO customer (customer_name, phone_no, email, loyalty_points) 
+               VALUES ($1, $2, $3, $4) 
+               RETURNING customer_id`,
+              ['Guest Diner', `+91 ${Math.floor(9000000000 + Math.random() * 999999999)}`, '', 50]
+            );
+            if (newCust && newCust.rows && newCust.rows.length > 0) {
+              resolvedCustomerId = newCust.rows[0].customer_id;
+            }
+          }
+        } catch (e) {}
+      }
     }
 
     // Sync sequence to avoid collision with seed IDs

@@ -46,11 +46,21 @@ export const settleBill = async (req, res) => {
     return res.status(400).json({ success: false, error: 'total_bill is required' });
   }
 
+  let validCustomerId = null;
+  if (customer_id) {
+    try {
+      const custCheck = await query('SELECT customer_id FROM customer WHERE customer_id = $1', [customer_id]);
+      if (custCheck && custCheck.rows && custCheck.rows.length > 0) {
+        validCustomerId = custCheck.rows[0].customer_id;
+      }
+    } catch (e) {}
+  }
+
   const billId = Date.now();
   const settledBill = {
     bill_id: billId,
     order_id: order_id || null,
-    customer_id: customer_id || 1,
+    customer_id: validCustomerId,
     bill_time: new Date(),
     subtotal: parseFloat(subtotal || (total_bill / 1.05)),
     discount_amt: parseFloat(discount_amt || 0),
@@ -103,12 +113,26 @@ export const settleBill = async (req, res) => {
       }
     }
 
+    let validOrderId = null;
+    if (order_id) {
+      try {
+        const ordCheck = await query('SELECT order_id FROM orders WHERE order_id = $1', [order_id]);
+        if (ordCheck && ordCheck.rows && ordCheck.rows.length > 0) {
+          validOrderId = ordCheck.rows[0].order_id;
+        }
+      } catch (e) {}
+    }
+
+    try {
+      await query(`SELECT setval('bill_bill_id_seq', COALESCE((SELECT MAX(bill_id) FROM bill), 1), true)`);
+    } catch (e) {}
+
     await query(
       `INSERT INTO bill (order_id, customer_id, bill_time, subtotal, discount_amt, tax_amount, total_bill, payment_mode, payment_status, payment_time)
        VALUES ($1, $2, NOW(), $3, $4, $5, $6, $7, 'Settled', NOW())`,
       [
-        order_id || null,
-        customer_id || 1,
+        validOrderId,
+        validCustomerId,
         settledBill.subtotal,
         settledBill.discount_amt,
         settledBill.tax_amount,

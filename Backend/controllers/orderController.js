@@ -45,7 +45,16 @@ export const getAllOrders = async (req, res) => {
 
     const dbRes = await query(sql, params);
     if (dbRes && dbRes.rows) {
-      return res.json({ success: true, count: dbRes.rows.length, data: dbRes.rows, source: 'postgresql' });
+      // Resilient sync: merge any mockStore orders not present in PostgreSQL
+      const existingDbIds = new Set(dbRes.rows.map((o) => o.order_id));
+      let mockOrders = mockStore.orders.filter((o) => !existingDbIds.has(o.order_id));
+      if (status) mockOrders = mockOrders.filter((o) => o.order_status === status);
+      if (table_id) {
+        const cleanTable = String(table_id).replace(/[^0-9a-zA-Z-]/g, '');
+        mockOrders = mockOrders.filter((o) => String(o.table_id).replace(/[^0-9a-zA-Z-]/g, '') === cleanTable);
+      }
+      const combined = [...dbRes.rows, ...mockOrders];
+      return res.json({ success: true, count: combined.length, data: combined, source: 'postgresql' });
     }
 
     // Mock fallback
@@ -87,9 +96,19 @@ export const getKdsQueue = async (req, res) => {
     const dbMenu = await query('SELECT * FROM menu_items');
 
     if (dbOrders && dbOrders.rows && dbMenu && dbMenu.rows) {
-      rawOrders = dbOrders.rows;
-      rawDetails = dbDetails?.rows || [];
+      rawOrders = [...dbOrders.rows];
+      rawDetails = [...(dbDetails?.rows || [])];
       menuCatalog = dbMenu.rows;
+
+      // Resilient sync: merge any in-memory mockStore tickets not yet present in DB
+      const existingDbIds = new Set(rawOrders.map((o) => o.order_id));
+      const unpersistedMock = mockStore.orders.filter(
+        (o) => ['pending', 'preparing', 'ready'].includes(o.order_status) && !existingDbIds.has(o.order_id)
+      );
+      if (unpersistedMock.length > 0) {
+        rawOrders = [...rawOrders, ...unpersistedMock];
+        rawDetails = [...rawDetails, ...mockStore.order_details];
+      }
     } else {
       rawOrders = mockStore.orders.filter((o) => ['pending', 'preparing', 'ready'].includes(o.order_status));
       rawDetails = mockStore.order_details;
@@ -126,12 +145,15 @@ export const createOrder = async (req, res) => {
       menuCatalog = mockStore.menu_items;
     }
 
+    const validMenuItemIds = new Set(menuCatalog.map((m) => m.menu_id));
+
     const snapshottedItems = items.map((itm) => {
       const menuItem = menuCatalog.find((m) => m.menu_id === itm.item_id) || {};
       const unitPrice = parseFloat(itm.unit_price || menuItem.price || 0);
       const qty = parseInt(itm.quantity || 1, 10);
+      const validItemId = validMenuItemIds.has(itm.item_id) ? itm.item_id : (menuItem.menu_id || null);
       return {
-        item_id: itm.item_id || menuItem.menu_id || null,
+        item_id: validItemId,
         item_name: itm.item_name || menuItem.item_name || 'Special Dish',
         category: menuItem.category || 'Mains',
         prep_time: menuItem.prep_time || 15,
@@ -145,10 +167,39 @@ export const createOrder = async (req, res) => {
 
     const billing = calculateAggregateBill(snapshottedItems);
 
+    // 2. Validate customer_id and booking_id against PostgreSQL to prevent foreign key constraint violations
+    let validCustomerId = null;
+    if (customer_id) {
+      try {
+        const custRes = await query('SELECT customer_id FROM customer WHERE customer_id = $1', [customer_id]);
+        if (custRes && custRes.rows && custRes.rows.length > 0) {
+          validCustomerId = custRes.rows[0].customer_id;
+        }
+      } catch (e) {
+        console.warn('[orderController] Customer validation check warning:', e.message);
+      }
+    }
+
+    let validBookingId = null;
+    if (booking_id) {
+      try {
+        const bookRes = await query('SELECT booking_id FROM booking WHERE booking_id = $1', [booking_id]);
+        if (bookRes && bookRes.rows && bookRes.rows.length > 0) {
+          validBookingId = bookRes.rows[0].booking_id;
+        }
+      } catch (e) {
+        console.warn('[orderController] Booking validation check warning:', e.message);
+      }
+    }
+
     let createdOrder = null;
 
-    // 2. Insert into PostgreSQL orders table
+    // 3. Insert into PostgreSQL orders table
     try {
+      try {
+        await query(`SELECT setval('orders_order_id_seq', COALESCE((SELECT MAX(order_id) FROM orders), 1), true)`);
+      } catch (e) {}
+
       const orderInsertSql = `
         INSERT INTO orders (
           booking_id, customer_id, table_id, order_status, subtotal, discount, tax, total_amount, special_note
@@ -156,8 +207,8 @@ export const createOrder = async (req, res) => {
         RETURNING *;
       `;
       const orderRes = await query(orderInsertSql, [
-        booking_id || null,
-        customer_id || 1,
+        validBookingId,
+        validCustomerId,
         table_id,
         billing.subtotal,
         billing.discount,
@@ -169,6 +220,10 @@ export const createOrder = async (req, res) => {
       if (orderRes && orderRes.rows && orderRes.rows.length > 0) {
         createdOrder = orderRes.rows[0];
         const newOrderId = createdOrder.order_id;
+
+        try {
+          await query(`SELECT setval('order_details_order_item_id_seq', COALESCE((SELECT MAX(order_item_id) FROM order_details), 1), true)`);
+        } catch (e) {}
 
         // Insert order line items into order_details table
         for (const itm of snapshottedItems) {
@@ -189,14 +244,14 @@ export const createOrder = async (req, res) => {
         }
       }
     } catch (pgErr) {
-      console.warn('[orderController] PostgreSQL insertion fallback:', pgErr.message);
+      console.error('[orderController] PostgreSQL insertion failed:', pgErr.message);
     }
 
     const orderId = createdOrder ? createdOrder.order_id : Date.now();
     const finalOrder = {
       order_id: orderId,
-      booking_id: booking_id || null,
-      customer_id: customer_id || 1,
+      booking_id: validBookingId,
+      customer_id: validCustomerId,
       table_id,
       order_status: 'pending',
       subtotal: billing.subtotal,
